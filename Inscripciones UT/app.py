@@ -22,8 +22,8 @@ client = MongoClient(MONGO_URI)
 db = client['Users']
 collection = db['Users']
 
-# Configuración de SendGrid (desde .env)
-SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+# Configuración de SendGrid (desde .env) SENDGRID_API_KEY
+SENDGRID_API_KEY = os.environ.get('mlsn.ca96f35eba06a9909f6dd2ef7174eaa671a3090f45b8111f083e7453d5062f88')
 FROM_EMAIL = os.environ.get('FROM_EMAIL', 'fgrimaldo@corpsierramadre.com')
 
 # Serializador para crear y verificar tokens
