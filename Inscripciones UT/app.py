@@ -89,7 +89,7 @@ def enviar_email(destinatario, asunto, cuerpo):
 
 @app.route('/')
 def home():
-    return redirect(url_for('login'))
+    return render_template('index.html')
 
 
 # ======================================================
