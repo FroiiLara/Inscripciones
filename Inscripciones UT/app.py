@@ -1,9 +1,9 @@
 import os
-from functools import wraps
+from datetime import timedelta
 from dotenv import load_dotenv
 from flask import (
     Flask, request, render_template,
-    redirect, url_for, session, flash, abort
+    redirect, url_for, flash, abort
 )
 from flask_bcrypt import Bcrypt
 from pymongo import MongoClient
@@ -11,56 +11,62 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from itsdangerous import URLSafeTimedSerializer as Serializer, BadSignature, SignatureExpired
 
-# ==========================================================
+from flask_jwt_extended import (
+    JWTManager,
+    create_access_token,
+    jwt_required,
+    get_jwt_identity,
+    set_access_cookies,
+    unset_jwt_cookies,
+    verify_jwt_in_request
+)
+
+# ======================================================
 # CONFIGURACIÓN INICIAL
-# ==========================================================
+# ======================================================
 
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY')
+app.secret_key = os.environ.get("SECRET_KEY")
 
 bcrypt = Bcrypt(app)
 
-# MongoDB
-MONGO_URI = os.environ.get('MONGO_URI')
+# ================= JWT CONFIG =================
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY")
+app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+app.config["JWT_ACCESS_COOKIE_PATH"] = "/"
+app.config["JWT_COOKIE_CSRF_PROTECT"] = False  # En producción poner True
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
+
+jwt = JWTManager(app)
+
+# ================= MONGODB =================
+MONGO_URI = os.environ.get("MONGO_URI")
 client = MongoClient(MONGO_URI)
-db = client['Users']
-collection = db['Users']
+db = client["Users"]
+collection = db["Users"]
 
-# SendGrid
-SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
-FROM_EMAIL = os.environ.get('FROM_EMAIL')
+# ================= SENDGRID =================
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
+FROM_EMAIL = os.environ.get("FROM_EMAIL")
 
-# Serializer
-serializer = Serializer(app.secret_key, salt='password-reset-salt')
+# ================= SERIALIZER =================
+serializer = Serializer(app.secret_key, salt="password-reset-salt")
 
-
-# ==========================================================
-# CONTEXT PROCESSOR (usuario disponible en todos los templates)
-# ==========================================================
+# ======================================================
+# CONTEXT PROCESSOR CORREGIDO
+# ======================================================
 
 @app.context_processor
 def inject_user():
-    return dict(usuario=session.get('usuario'))
+    verify_jwt_in_request(optional=True)
+    return dict(usuario=get_jwt_identity())
 
 
-# ==========================================================
-# DECORADOR DE AUTENTICACIÓN
-# ==========================================================
-
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'usuario' not in session:
-            abort(401)
-        return f(*args, **kwargs)
-    return decorated_function
-
-
-# ==========================================================
+# ======================================================
 # FUNCIÓN PARA ENVIAR EMAIL
-# ==========================================================
+# ======================================================
 
 def enviar_email(destinatario, asunto, cuerpo):
     try:
@@ -77,22 +83,23 @@ def enviar_email(destinatario, asunto, cuerpo):
         abort(500)
 
 
-# ==========================================================
-# RUTAS PRINCIPALES
-# ==========================================================
+# ======================================================
+# RUTA HOME
+# ======================================================
 
 @app.route('/')
 def home():
-    if 'usuario' in session:
-        return redirect(url_for('pagina_principal'))
     return redirect(url_for('login'))
 
 
-# ---------------- REGISTRO ----------------
+# ======================================================
+# REGISTRO
+# ======================================================
 
 @app.route('/registro', methods=['GET', 'POST'])
 def registro():
     if request.method == 'POST':
+
         usuario = request.form.get('usuario')
         email = request.form.get('email')
         contrasena = request.form.get('contrasena')
@@ -104,28 +111,28 @@ def registro():
             flash("El correo ya está registrado.", "error")
             return redirect(url_for('registro'))
 
-        try:
-            hashed = bcrypt.generate_password_hash(contrasena).decode('utf-8')
-            collection.insert_one({
-                'usuario': usuario,
-                'email': email,
-                'contrasena': hashed
-            })
-        except Exception as e:
-            print(e)
-            abort(500)
+        hashed = bcrypt.generate_password_hash(contrasena).decode('utf-8')
 
-        session['usuario'] = usuario
-        return redirect(url_for('pagina_principal'))
+        collection.insert_one({
+            'usuario': usuario,
+            'email': email,
+            'contrasena': hashed
+        })
+
+        flash("Registro exitoso. Inicia sesión.", "success")
+        return redirect(url_for('login'))
 
     return render_template('register.html')
 
 
-# ---------------- LOGIN ----------------
+# ======================================================
+# LOGIN (GENERA JWT)
+# ======================================================
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+
         usuario = request.form.get('usuario')
         contrasena = request.form.get('contrasena')
 
@@ -135,8 +142,13 @@ def login():
         user = collection.find_one({'usuario': usuario})
 
         if user and bcrypt.check_password_hash(user['contrasena'], contrasena):
-            session['usuario'] = usuario
-            return redirect(url_for('pagina_principal'))
+
+            access_token = create_access_token(identity=usuario)
+
+            response = redirect(url_for('pagina_principal'))
+            set_access_cookies(response, access_token)
+
+            return response
 
         flash("Usuario o contraseña incorrectos.", "error")
         return render_template('login.html'), 401
@@ -144,29 +156,33 @@ def login():
     return render_template('login.html')
 
 
-# ---------------- LOGOUT ----------------
+# ======================================================
+# LOGOUT
+# ======================================================
 
 @app.route('/logout')
-@login_required
+@jwt_required()
 def logout():
-    session.clear()
-    return redirect(url_for('login'))
+    response = redirect(url_for('login'))
+    unset_jwt_cookies(response)
+    return response
 
 
-# ==========================================================
+# ======================================================
 # PÁGINAS PROTEGIDAS
-# ==========================================================
+# ======================================================
 
 @app.route('/pagina_principal')
-@login_required
+@jwt_required()
 def pagina_principal():
-    return render_template('index.html')
+    usuario = get_jwt_identity()
+    return render_template('index.html', usuario=usuario)
 
 
 @app.route('/mi_perfil')
-@login_required
+@jwt_required()
 def mi_perfil():
-    usuario = session['usuario']
+    usuario = get_jwt_identity()
     user_data = collection.find_one({'usuario': usuario})
 
     if not user_data:
@@ -174,35 +190,40 @@ def mi_perfil():
 
     return render_template(
         'mi_perfil.html',
+        usuario=usuario,
         email=user_data['email']
     )
 
 
 @app.route('/inscripcion')
-@login_required
+@jwt_required()
 def inscripcion():
-    return render_template('inscripcion.html')
+    usuario = get_jwt_identity()
+    return render_template('inscripcion.html', usuario=usuario)
 
 
 @app.route('/reinscripcion')
-@login_required
+@jwt_required()
 def reinscripcion():
-    return render_template('reinscripcion.html')
+    usuario = get_jwt_identity()
+    return render_template('reinscripcion.html', usuario=usuario)
 
 
 @app.route('/soporte')
-@login_required
+@jwt_required()
 def soporte():
-    return render_template('soporte.html')
+    usuario = get_jwt_identity()
+    return render_template('soporte.html', usuario=usuario)
 
 
-# ==========================================================
-# RECUPERACIÓN DE CONTRASEÑA
-# ==========================================================
+# ======================================================
+# RECUPERAR CONTRASEÑA
+# ======================================================
 
 @app.route('/recuperar_contrasena', methods=['GET', 'POST'])
 def recuperar_contrasena():
     if request.method == 'POST':
+
         email = request.form.get('email')
 
         if not email:
@@ -252,9 +273,9 @@ def restablecer_contrasena(token):
     return render_template('restablecer_contrasena.html')
 
 
-# ==========================================================
+# ======================================================
 # MANEJO GLOBAL DE ERRORES
-# ==========================================================
+# ======================================================
 
 @app.errorhandler(400)
 def bad_request(e):
@@ -282,10 +303,11 @@ def handle_unexpected_error(e):
     return render_template("500.html"), 500
 
 
-# ==========================================================
+# ======================================================
 # EJECUCIÓN
-# ==========================================================
+# ======================================================
 
 if __name__ == '__main__':
-    app.run(debug=True)  # Cambiar a False en producción
+    app.run(debug=True)
+
 
