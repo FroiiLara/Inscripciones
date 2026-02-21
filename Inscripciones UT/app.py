@@ -60,8 +60,13 @@ serializer = Serializer(app.secret_key, salt="password-reset-salt")
 
 @app.context_processor
 def inject_user():
-    verify_jwt_in_request(optional=True)
-    return dict(usuario=get_jwt_identity())
+    try:
+        verify_jwt_in_request(optional=True)
+        usuario = get_jwt_identity()
+    except Exception:
+        usuario = None
+
+    return dict(usuario=usuario)
 
 
 # ======================================================
@@ -89,7 +94,7 @@ def enviar_email(destinatario, asunto, cuerpo):
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return redirect(url_for('login'))
 
 
 # ======================================================
