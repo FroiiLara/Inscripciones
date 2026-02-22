@@ -31,12 +31,10 @@
 
                 <div class="form-group">
                     <i class="fas fa-envelope"></i>
-                    <input
-                        type="email"
-                        name="email"
-                        placeholder="Correo electrónico"
-                        required
-                    >
+                    <input type="email" name="email" 
+                        placeholder="Correo institucional @utsc.edu.mx" 
+                        required pattern=".+@utsc\.edu\.mx"
+                        title="Ingresa el correo con el que te registraste (@utsc.edu.mx)">
                 </div>
 
                 <button type="submit" class="btn-primary">

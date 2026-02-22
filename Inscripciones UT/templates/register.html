@@ -32,40 +32,28 @@
 
             <!-- Usuario -->
             <div class="form-group">
-                <i class="fas fa-user icon"></i>
-                <input
-                    type="text"
-                    name="usuario"
-                    placeholder="Nombre de Usuario"
-                    required
-                >
+                 <i class="fas fa-user icon"></i>
+                    <input type="text" name="usuario" placeholder="Nombre de Usuario" 
+                        required minlength="4" maxlength="15" 
+                        pattern="^[a-zA-Z0-9_]+$" title="Solo letras, números y guiones bajos (sin espacios)">
             </div>
 
             <!-- Email -->
             <div class="form-group">
                 <i class="fas fa-envelope icon"></i>
-                <input
-                    type="email"
-                    name="email"
-                    placeholder="Correo Electrónico"
-                    required
-                >
-            </div>
+                <input type="email" name="email" placeholder="Correo Institucional" 
+                    required pattern=".+@utsc\.edu\.mx" 
+                    title="Debe ser un correo oficial terminado en @utsc.edu.mx">
+                </div>
 
             <!-- Contraseña -->
             <div class="form-group password-group">
                 <i class="fas fa-lock icon"></i>
-                <input
-                    type="password"
-                    name="contrasena"
-                    id="password"
-                    placeholder="Contraseña"
-                    required
-                >
-                <span class="toggle-password" id="togglePassword">
-                    <i class="fas fa-eye"></i>
-                </span>
-            </div>
+                <input type="password" name="contrasena" id="password" placeholder="Contraseña" 
+                    required minlength="8" 
+                    title="La contraseña debe tener al menos 8 caracteres">
+                    <span class="toggle-password" id="togglePassword"><i class="fas fa-eye"></i></span>
+                </div>
 
             <!-- Botón -->
             <button type="submit" class="btn">Registrarse</button>

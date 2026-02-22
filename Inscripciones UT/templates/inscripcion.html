@@ -78,22 +78,24 @@
 
             <div class="form-group">
                 <label>Nombre Completo del Alumno</label>
-                <input type="text" name="nombre" placeholder="Ej. Juan Pérez" required>
+                <input type="text" name="nombre" placeholder="Ej. Juan Pérez" 
+                    required minlength="10" 
+                    pattern="^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$" 
+                    title="Solo se permiten letras y espacios">
             </div>
 
             <div class="docs-box">
-                <h4>Carga de Documentación</h4>
-
-                <div class="form-group">
-                    <label>Acta de Nacimiento (PDF/JPG)</label>
-                    <input type="file" name="doc_acta">
-                </div>
-
-                <div class="form-group">
-                    <label>Certificado de Bachillerato</label>
-                    <input type="file" name="doc_cert">
-                </div>
+            <h4>Carga de Documentación</h4>
+            <div class="form-group">
+                <label>Acta de Nacimiento (Solo PDF)</label>
+                <input type="file" name="doc_acta" required accept=".pdf">
             </div>
+
+            <div class="form-group">
+                <label>Certificado de Bachillerato (PDF o Imagen)</label>
+                <input type="file" name="doc_cert" required accept=".pdf,image/jpeg,image/png">
+            </div>
+        </div>
 
             <button type="submit" class="btn-primary">
                 ENVIAR INSCRIPCIÓN

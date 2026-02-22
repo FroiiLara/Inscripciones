@@ -80,12 +80,14 @@
 
             <div class="form-group">
                 <label>Matrícula del Alumno</label>
-                <input type="text" name="matricula" placeholder="12345678" required>
+                <input type="text" name="matricula" placeholder="12345678" 
+                    required pattern="\d{8,10}" 
+                    title="La matrícula debe ser de 8 a 10 dígitos numéricos">
             </div>
 
             <div class="form-group">
-                <label>Comprobante de Pago</label>
-                <input type="file" name="comprobante">
+                <label>Comprobante de Pago (PDF/Imagen)</label>
+                <input type="file" name="comprobante" required accept=".pdf,image/*">
             </div>
 
             <button type="submit"

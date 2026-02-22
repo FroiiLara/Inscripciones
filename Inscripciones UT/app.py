@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import timedelta
 from dotenv import load_dotenv
 from flask import (
@@ -55,7 +56,21 @@ FROM_EMAIL = os.environ.get("FROM_EMAIL")
 serializer = Serializer(app.secret_key, salt="password-reset-salt")
 
 # ======================================================
-# CONTEXT PROCESSOR CORREGIDO
+# UTILIDADES DE SEGURIDAD (PREVENCIÓN DE INYECCIÓN)
+# ======================================================
+
+def validar_no_sql_injection(dato):
+    """
+    Bloquea el uso de diccionarios u operadores de MongoDB ($) 
+    en campos de texto para prevenir NoSQL Injection.
+    """
+    if isinstance(dato, dict): return False
+    # Evita que el usuario envíe operadores de consulta de MongoDB
+    if "$" in str(dato): return False
+    return True
+
+# ======================================================
+# CONTEXT PROCESSOR
 # ======================================================
 
 @app.context_processor
@@ -65,7 +80,6 @@ def inject_user():
         usuario = get_jwt_identity()
     except Exception:
         usuario = None
-
     return dict(usuario=usuario)
 
 
@@ -89,7 +103,7 @@ def enviar_email(destinatario, asunto, cuerpo):
 
 
 # ======================================================
-# RUTA HOME
+# RUTAS
 # ======================================================
 
 @app.route('/')
@@ -97,20 +111,26 @@ def home():
     return redirect(url_for('login'))
 
 
-# ======================================================
-# REGISTRO
-# ======================================================
-
 @app.route('/registro', methods=['GET', 'POST'])
 def registro():
     if request.method == 'POST':
+        # SANITIZACIÓN Y PREVENCIÓN DE INYECCIÓN
+        usuario = str(request.form.get('usuario', '')).strip()
+        email = str(request.form.get('email', '')).lower().strip()
+        contrasena = str(request.form.get('contrasena', ''))
 
-        usuario = request.form.get('usuario')
-        email = request.form.get('email')
-        contrasena = request.form.get('contrasena')
-
+        # Validación de integridad de datos
         if not usuario or not email or not contrasena:
             abort(400)
+        
+        if not validar_no_sql_injection(usuario) or not validar_no_sql_injection(email):
+            flash("Caracteres no permitidos detectados.", "error")
+            return redirect(url_for('registro'))
+
+        # Validación de lógica de negocio (Email Institucional)
+        if not email.endswith("@utsc.edu.mx"):
+            flash("Debe usar un correo institucional @utsc.edu.mx", "error")
+            return redirect(url_for('registro'))
 
         if collection.find_one({'email': email}):
             flash("El correo ya está registrado.", "error")
@@ -130,29 +150,23 @@ def registro():
     return render_template('register.html')
 
 
-# ======================================================
-# LOGIN (GENERA JWT)
-# ======================================================
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-
-        usuario = request.form.get('usuario')
-        contrasena = request.form.get('contrasena')
+        # SANITIZACIÓN
+        usuario = str(request.form.get('usuario', '')).strip()
+        contrasena = str(request.form.get('contrasena', ''))
 
         if not usuario or not contrasena:
             abort(400)
 
-        user = collection.find_one({'usuario': usuario})
+        # Seguridad NoSQL: Forzamos búsqueda por string exacto
+        user = collection.find_one({'usuario': {"$eq": usuario}})
 
         if user and bcrypt.check_password_hash(user['contrasena'], contrasena):
-
             access_token = create_access_token(identity=usuario)
-
             response = redirect(url_for('pagina_principal'))
             set_access_cookies(response, access_token)
-
             return response
 
         flash("Usuario o contraseña incorrectos.", "error")
@@ -160,10 +174,6 @@ def login():
 
     return render_template('login.html')
 
-
-# ======================================================
-# LOGOUT
-# ======================================================
 
 @app.route('/logout')
 @jwt_required()
@@ -173,9 +183,7 @@ def logout():
     return response
 
 
-# ======================================================
-# PÁGINAS PROTEGIDAS
-# ======================================================
+# ================= PÁGINAS PROTEGIDAS =================
 
 @app.route('/pagina_principal')
 @jwt_required()
@@ -189,15 +197,9 @@ def pagina_principal():
 def mi_perfil():
     usuario = get_jwt_identity()
     user_data = collection.find_one({'usuario': usuario})
-
     if not user_data:
         abort(404)
-
-    return render_template(
-        'mi_perfil.html',
-        usuario=usuario,
-        email=user_data['email']
-    )
+    return render_template('mi_perfil.html', usuario=usuario, email=user_data['email'])
 
 
 @app.route('/inscripcion')
@@ -221,17 +223,14 @@ def soporte():
     return render_template('soporte.html', usuario=usuario)
 
 
-# ======================================================
-# RECUPERAR CONTRASEÑA
-# ======================================================
+# ================= RECUPERACIÓN =================
 
 @app.route('/recuperar_contrasena', methods=['GET', 'POST'])
 def recuperar_contrasena():
     if request.method == 'POST':
+        email = str(request.form.get('email', '')).lower().strip()
 
-        email = request.form.get('email')
-
-        if not email:
+        if not email or not validar_no_sql_injection(email):
             abort(400)
 
         user = collection.find_one({'email': email})
@@ -239,12 +238,7 @@ def recuperar_contrasena():
         if user:
             token = serializer.dumps(email)
             enlace = url_for('restablecer_contrasena', token=token, _external=True)
-
-            cuerpo = f"""
-            <p>Haz clic en el siguiente enlace para restablecer tu contraseña:</p>
-            <a href="{enlace}">Restablecer contraseña</a>
-            """
-
+            cuerpo = f"<p>Haz clic para restablecer tu contraseña:</p><a href='{enlace}'>Restablecer contraseña</a>"
             enviar_email(email, "Recuperación de contraseña", cuerpo)
             flash("Correo enviado correctamente.", "success")
         else:
@@ -264,10 +258,11 @@ def restablecer_contrasena(token):
         abort(400)
 
     if request.method == 'POST':
-        nueva = request.form.get('nueva_contrasena')
+        nueva = str(request.form.get('nueva_contrasena', ''))
 
-        if not nueva:
-            abort(400)
+        if not nueva or len(nueva) < 8:
+            flash("Contraseña inválida (mínimo 8 caracteres).", "error")
+            return redirect(request.url)
 
         hashed = bcrypt.generate_password_hash(nueva).decode('utf-8')
         collection.update_one({'email': email}, {'$set': {'contrasena': hashed}})
@@ -278,41 +273,24 @@ def restablecer_contrasena(token):
     return render_template('restablecer_contrasena.html')
 
 
-# ======================================================
-# MANEJO GLOBAL DE ERRORES
-# ======================================================
+# ================= ERRORES =================
 
 @app.errorhandler(400)
-def bad_request(e):
-    return render_template("400.html"), 400
-
+def bad_request(e): return render_template("400.html"), 400
 
 @app.errorhandler(401)
-def unauthorized(e):
-    return render_template("401.html"), 401
-
+def unauthorized(e): return render_template("401.html"), 401
 
 @app.errorhandler(404)
-def not_found(e):
-    return render_template("404.html"), 404
-
+def not_found(e): return render_template("404.html"), 404
 
 @app.errorhandler(500)
-def internal_error(e):
-    return render_template("500.html"), 500
-
+def internal_error(e): return render_template("500.html"), 500
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(e):
     print(f"Unexpected error: {e}")
     return render_template("500.html"), 500
 
-
-# ======================================================
-# EJECUCIÓN
-# ======================================================
-
 if __name__ == '__main__':
     app.run(debug=True)
-
-

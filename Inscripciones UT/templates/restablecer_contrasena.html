@@ -29,7 +29,16 @@
             <form action="{{ url_for('recuperar_contrasena') }}" method="POST">
                 <div class="form-group">
                     <i class="fas fa-envelope"></i>
-                    <input type="email" name="email" placeholder="Correo electrónico" required>
+                    <input 
+                        type="email" 
+                        name="email" 
+                        placeholder="ejemplo@utsc.edu.mx" 
+                        required
+                        maxlength="50"
+                        pattern="[a-zA-Z0-9._%+-]+@utsc\.edu\.mx"
+                        title="Por favor, ingresa un correo institucional válido terminado en @utsc.edu.mx"
+                        style="text-transform: lowercase;"
+                    >
                 </div>
 
                 <button type="submit" class="btn-primary">
@@ -45,4 +54,3 @@
 
 </body>
 </html>
-
