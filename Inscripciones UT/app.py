@@ -69,6 +69,8 @@ def validar_no_sql_injection(dato):
     if "$" in str(dato): return False
     return True
 
+
+
 # ======================================================
 # CONTEXT PROCESSOR
 # ======================================================
