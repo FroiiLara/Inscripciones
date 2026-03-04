@@ -98,10 +98,11 @@ def enviar_email(destinatario, asunto, cuerpo):
             html_content=cuerpo
         )
         sg = SendGridAPIClient(SENDGRID_API_KEY)
-        sg.send(mensaje)
+        response = sg.send(mensaje)
+        return True # Indica que se envió
     except Exception as e:
-        print(f"Error enviando email: {e}")
-        abort(500)
+        print(f"Error detallado de SendGrid: {e}")
+        return False
 
 
 # ======================================================
@@ -130,8 +131,8 @@ def registro():
             return redirect(url_for('registro'))
 
         # Validación de lógica de negocio (Email Institucional)
-        if not email.endswith("@utsc.edu.mx"):
-            flash("Debe usar un correo institucional @utsc.edu.mx", "error")
+        if not email.endswith("@virtual.utsc.edu.mx"):
+            flash("Debe usar un correo institucional @virtual.utsc.edu.mx", "error")
             return redirect(url_for('registro'))
 
         if collection.find_one({'email': email}):
@@ -232,19 +233,49 @@ def recuperar_contrasena():
     if request.method == 'POST':
         email = str(request.form.get('email', '')).lower().strip()
 
+        # 1. Validaciones básicas de seguridad y presencia
         if not email or not validar_no_sql_injection(email):
-            abort(400)
+            flash("Correo electrónico no válido.", "error")
+            return redirect(url_for('recuperar_contrasena'))
 
+        # 2. Buscar al usuario en MongoDB
         user = collection.find_one({'email': email})
 
         if user:
-            token = serializer.dumps(email)
-            enlace = url_for('restablecer_contrasena', token=token, _external=True)
-            cuerpo = f"<p>Haz clic para restablecer tu contraseña:</p><a href='{enlace}'>Restablecer contraseña</a>"
-            enviar_email(email, "Recuperación de contraseña", cuerpo)
-            flash("Correo enviado correctamente.", "success")
+            try:
+                # 3. Generar token seguro
+                token = serializer.dumps(email, salt="password-reset-salt")
+                enlace = url_for('restablecer_contrasena', token=token, _external=True)
+                
+                # 4. Preparar el cuerpo del mensaje
+                cuerpo = f"""
+                <div style="font-family: sans-serif; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
+                    <h2 style="color: #333;">Restablecer Contraseña</h2>
+                    <p>Has solicitado restablecer tu contraseña para tu cuenta institucional.</p>
+                    <p>Haz clic en el siguiente botón para continuar (el enlace expira en 1 hora):</p>
+                    <a href='{enlace}' style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                        Restablecer contraseña
+                    </a>
+                    <p style="margin-top: 20px; font-size: 12px; color: #777;">Si no solicitaste este cambio, puedes ignorar este correo.</p>
+                </div>
+                """
+                
+                # 5. Intentar enviar el email
+                if enviar_email(email, "Recuperación de contraseña", cuerpo):
+                    flash("Se han enviado las instrucciones a tu correo institucional.", "success")
+                else:
+                    # Si enviar_email devuelve False (Error 401, etc.)
+                    flash("Error al conectar con el servicio de correos. Verifica tu configuración de SendGrid.", "error")
+            
+            except Exception as e:
+                print(f"Error en el proceso de recuperación: {e}")
+                flash("Ocurrió un error inesperado. Inténtalo de nuevo.", "error")
         else:
-            flash("Correo no registrado.", "error")
+            # Por seguridad, algunos prefieren decir "Si el correo existe, se envió...", 
+            # pero aquí lo mantendremos como lo tenías:
+            flash("El correo ingresado no está registrado en el sistema.", "error")
+            
+        return redirect(url_for('recuperar_contrasena'))
 
     return render_template('recuperar_contrasena.html')
 
