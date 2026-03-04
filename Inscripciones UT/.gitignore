@@ -49,3 +49,4 @@ ENV/
 # Variables de entorno (¡IMPORTANTE!)
 .env
 *.env
+sendgrid.env
