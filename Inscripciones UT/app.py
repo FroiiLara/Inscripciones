@@ -90,19 +90,18 @@ def inject_user():
 # ======================================================
 
 def enviar_email(destinatario, asunto, cuerpo):
+    mensaje = Mail(
+        from_email='fgrimaldo@corpsierramadre.com',
+        to_emails=destinatario,
+        subject=asunto,
+        html_content=cuerpo
+    )
     try:
-        mensaje = Mail(
-            from_email=FROM_EMAIL,
-            to_emails=destinatario,
-            subject=asunto,
-            html_content=cuerpo
-        )
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        sg = SendGridAPIClient(SENDGRID_API_KEY)  
         response = sg.send(mensaje)
-        return True # Indica que se envió
+        print(f"Correo enviado con éxito! Status code: {response.status_code}")
     except Exception as e:
-        print(f"Error detallado de SendGrid: {e}")
-        return False
+        print(f"Error al enviar el correo: {e}")
 
 
 # ======================================================
@@ -231,76 +230,39 @@ def soporte():
 @app.route('/recuperar_contrasena', methods=['GET', 'POST'])
 def recuperar_contrasena():
     if request.method == 'POST':
-        email = str(request.form.get('email', '')).lower().strip()
+        email = request.form['email']
+        usuario = collection.find_one({'email': email})
 
-        # 1. Validaciones básicas de seguridad y presencia
-        if not email or not validar_no_sql_injection(email):
-            flash("Correo electrónico no válido.", "error")
-            return redirect(url_for('recuperar_contrasena'))
-
-        # 2. Buscar al usuario en MongoDB
-        user = collection.find_one({'email': email})
-
-        if user:
-            try:
-                # 3. Generar token seguro
-                token = serializer.dumps(email, salt="password-reset-salt")
-                enlace = url_for('restablecer_contrasena', token=token, _external=True)
-                
-                # 4. Preparar el cuerpo del mensaje
-                cuerpo = f"""
-                <div style="font-family: sans-serif; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
-                    <h2 style="color: #333;">Restablecer Contraseña</h2>
-                    <p>Has solicitado restablecer tu contraseña para tu cuenta institucional.</p>
-                    <p>Haz clic en el siguiente botón para continuar (el enlace expira en 1 hora):</p>
-                    <a href='{enlace}' style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                        Restablecer contraseña
-                    </a>
-                    <p style="margin-top: 20px; font-size: 12px; color: #777;">Si no solicitaste este cambio, puedes ignorar este correo.</p>
-                </div>
-                """
-                
-                # 5. Intentar enviar el email
-                if enviar_email(email, "Recuperación de contraseña", cuerpo):
-                    flash("Se han enviado las instrucciones a tu correo institucional.", "success")
-                else:
-                    # Si enviar_email devuelve False (Error 401, etc.)
-                    flash("Error al conectar con el servicio de correos. Verifica tu configuración de SendGrid.", "error")
-            
-            except Exception as e:
-                print(f"Error en el proceso de recuperación: {e}")
-                flash("Ocurrió un error inesperado. Inténtalo de nuevo.", "error")
+        if usuario:
+            token = serializer.dumps(email, salt='password-reset-salt')
+            enlace = url_for('restablecer_contrasena', token=token, _external=True)
+            asunto = "Recuperación de contraseña"
+            cuerpo = f"""
+            <p>Hola, hemos recibido una solicitud para restablecer tu contraseña.</p>
+            <p>Si no has solicitado este cambio, ignora este mensaje.</p>
+            <p>Para restablecer tu contraseña, haz clic en el siguiente enlace:</p>
+            <a href="{enlace}">Restablecer contraseña</a>
+            """
+            enviar_email(email, asunto, cuerpo)
+            flash("Te hemos enviado un correo para recuperar tu contraseña.", "success")
         else:
-            # Por seguridad, algunos prefieren decir "Si el correo existe, se envió...", 
-            # pero aquí lo mantendremos como lo tenías:
-            flash("El correo ingresado no está registrado en el sistema.", "error")
-            
-        return redirect(url_for('recuperar_contrasena'))
+            flash("El correo electrónico no está registrado.", "error")
 
     return render_template('recuperar_contrasena.html')
-
 
 @app.route('/restablecer_contrasena/<token>', methods=['GET', 'POST'])
 def restablecer_contrasena(token):
     try:
-        email = serializer.loads(token, max_age=3600)
-    except SignatureExpired:
-        flash("El enlace ha expirado.", "error")
+        email = serializer.loads(token, salt='password-reset-salt', max_age=3600)
+    except:
+        flash("El enlace de restablecimiento ha caducado o es inválido.", "error")
         return redirect(url_for('recuperar_contrasena'))
-    except BadSignature:
-        abort(400)
 
     if request.method == 'POST':
-        nueva = str(request.form.get('nueva_contrasena', ''))
-
-        if not nueva or len(nueva) < 8:
-            flash("Contraseña inválida (mínimo 8 caracteres).", "error")
-            return redirect(request.url)
-
-        hashed = bcrypt.generate_password_hash(nueva).decode('utf-8')
-        collection.update_one({'email': email}, {'$set': {'contrasena': hashed}})
-
-        flash("Contraseña actualizada correctamente.", "success")
+        nueva_contrasena = request.form['nueva_contrasena']
+        hashed_password = bcrypt.generate_password_hash(nueva_contrasena).decode('utf-8')
+        collection.update_one({'email': email}, {'$set': {'contrasena': hashed_password}})
+        flash("Tu contraseña ha sido restablecida con éxito.", "success")
         return redirect(url_for('login'))
 
     return render_template('restablecer_contrasena.html')
