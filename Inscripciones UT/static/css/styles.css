@@ -76,6 +76,10 @@ body::before {
     width: 100%;
 }
 
+.password-group {
+    position: relative;
+}
+
 .form-group .icon {
     position: absolute;
     left: 15px; /* Más padding para el ícono */
@@ -163,24 +167,35 @@ body::before {
 /* Password Toggle Icon */
 .toggle-password {
     position: absolute;
-    right: 15px; /* Ajustado para más espacio */
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
-    width: 25px; /* Aumentado el tamaño del contenedor */
-    height: 25px;
+    width: 20px;
+    height: 20px;
     cursor: pointer;
     background: transparent;
-    border: none; /* Eliminamos el borde */
-    color: #888; /* Color de ícono */
-    transition: all 0.3s ease;
-    z-index: 3;
+    border: none;
+    color: #666;
+    transition: color 0.2s ease;
+    z-index: 4;
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 0;
+}
+
+.toggle-password:hover {
+    color: #333;
 }
 
 .toggle-password i {
-    font-size: 18px;
+    font-size: 15px;
+    line-height: 1;
+}
+
+/* El input dentro de password-group necesita espacio a la derecha para el ojo */
+.password-group input {
+    padding-right: 45px !important;
 }
 
 /* Se eliminan los pseudo-elementos ::before y ::after ya que usaremos íconos de Font Awesome */
@@ -188,14 +203,28 @@ body::before {
 
 /* Estilo del mensaje de error */
 .error-message {
-    color: #ff4d4d;
     font-size: 14px;
     text-align: center;
     margin-bottom: 15px;
-    border: 1px solid #ff4d4d;
-    background-color: rgba(255, 77, 77, 0.1);
-    padding: 10px;
-    border-radius: 5px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: rgba(220, 53, 69, 0.92);
+    border: 1px solid #dc3545;
+}
+
+/* Mensaje de éxito (verde) */
+.success-message {
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 15px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: rgba(40, 167, 69, 0.92);
+    border: 1px solid #28a745;
 }
 
 
