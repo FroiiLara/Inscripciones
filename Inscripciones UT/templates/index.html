@@ -14,9 +14,10 @@
 <!-- ===== HEADER / NAVBAR ===== -->
 <header>
     <nav class="navbar">
-        <img src="/static/img/logo.png" alt="logo" class="nav-logo">
-
-        <h1 class="navbar-title">Bienvenido, {{ usuario }}!</h1>
+        <div class="navbar-left">
+            <img src="/static/img/logo.png" alt="logo" class="nav-logo">
+            <span>Gobierno de Nuevo León</span>
+        </div>
 
         <ul class="navbar-menu">
             <li><a href="/pagina_principal" class="active">Inicio</a></li>
@@ -83,7 +84,7 @@
         <div class="footer-section">
             <h4>Contacto</h4>
             <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
-            <p><i class="fas fa-envelope"></i> soporte@utsc.edu.mx</p>
+            <p><i class="fas fa-envelope"></i> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="63100c130c11170623161710004d0607164d0e1b">[email&#160;protected]</a></p>
         </div>
 
         <div class="footer-section">
@@ -101,12 +102,4 @@
     </div>
 </footer>
 
-<script>
-function toggleMenu() {
-    document.getElementById('mobileMenu').classList.toggle('active');
-}
-</script>
-
-</body>
-</html>
-
+<script dat
