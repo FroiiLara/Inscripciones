@@ -3,54 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Escolar Nuevo León</title>
+    <title>Inscripción | UTSC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <style>
+        .stepper { display:flex; align-items:center; margin-bottom:35px; }
+        .step { display:flex; flex-direction:column; align-items:center; flex:1; }
+        .step-circle {
+            width:40px; height:40px; border-radius:50%; background-color:#ddd; color:#999;
+            display:flex; align-items:center; justify-content:center;
+            font-weight:bold; font-size:15px; transition:all 0.3s;
+        }
+        .step.active .step-circle { background-color:var(--nl-orange); color:white; }
+        .step.done   .step-circle { background-color:var(--nl-green);  color:white; }
+        .step-label { font-size:0.7rem; margin-top:6px; color:#999; text-align:center; line-height:1.3; }
+        .step.active .step-label { color:var(--nl-orange); font-weight:600; }
+        .step.done   .step-label { color:var(--nl-green); }
+        .step-line { flex:1; height:3px; background-color:#ddd; margin-bottom:24px; transition:background-color 0.3s; }
+        .step-line.done { background-color:var(--nl-green); }
+        .form-step { display:none; }
+        .form-step.active { display:block; }
+        .step-title { color:var(--nl-green); font-size:1.05rem; font-weight:600; border-bottom:2px solid var(--nl-orange); padding-bottom:8px; margin-bottom:22px; }
+        .btn-nav { display:flex; justify-content:space-between; margin-top:28px; gap:12px; }
+        .btn-prev { background-color:#6c757d; color:white; border:none; padding:12px 28px; border-radius:6px; font-size:15px; font-weight:bold; cursor:pointer; }
+        .btn-prev:hover { background-color:#5a6268; }
+        .btn-next { background-color:var(--nl-orange); color:white; border:none; padding:12px 28px; border-radius:6px; font-size:15px; font-weight:bold; cursor:pointer; margin-left:auto; }
+        .btn-next:hover { background-color:#e67e00; }
+        .foto-container { text-align:center; margin-bottom:8px; }
+        .foto-placeholder { width:110px; height:110px; border-radius:50%; background-color:#f0f0f0; border:3px dashed #ccc; display:flex; align-items:center; justify-content:center; margin:10px auto 0; color:#aaa; font-size:2.5rem; }
+        .foto-preview { width:110px; height:110px; border-radius:50%; object-fit:cover; border:3px solid var(--nl-orange); display:none; margin:10px auto 0; }
+        select { width:100%; padding:12px; border-radius:6px; border:1px solid #ccc; font-size:15px; font-family:'Poppins',sans-serif; background-color:white; box-sizing:border-box; }
+        select:focus { outline:none; border-color:var(--nl-orange); box-shadow:0 0 0 2px rgba(255,138,0,0.2); }
+        input[type="date"] { width:100%; padding:12px; border-radius:6px; border:1px solid #ccc; font-size:15px; font-family:'Poppins',sans-serif; box-sizing:border-box; }
+        input[type="date"]:focus { outline:none; border-color:var(--nl-orange); }
+        .resumen-bloque { background:#f8f9fa; border-radius:10px; padding:18px 22px; margin-bottom:16px; }
+        .resumen-bloque h4 { color:var(--nl-green); margin-top:0; border-bottom:1px solid #ddd; padding-bottom:8px; }
+        .resumen-bloque p { margin:6px 0; font-size:0.92rem; }
+    </style>
 </head>
-
 <body>
 
-<!-- ================= NAVBAR ================= -->
 <header>
     <nav class="navbar">
         <div class="navbar-left">
             <img src="{{ url_for('static', filename='img/logo.png') }}" class="nav-logo" alt="Gobierno NL">
             <span class="navbar-title">Gobierno de Nuevo León</span>
         </div>
-
         <ul class="navbar-menu">
             <li><a href="/pagina_principal">Inicio</a></li>
             <li><a href="/inscripcion" class="active">Inscripción</a></li>
             <li><a href="/reinscripcion">Reinscripción</a></li>
             <li><a href="/soporte">Soporte</a></li>
-
-            <!-- PERFIL -->
             <li class="dropdown">
                 <button class="dropbtn">{{ usuario[0].upper() }}</button>
                 <div class="dropdown-content">
-                    <a href="/mi_perfil">
-                        <i class="fas fa-user"></i> Mi Perfil
-                    </a>
-                    <a href="/logout">
-                        <i class="fas fa-sign-out-alt"></i> Cerrar sesión
-                    </a>
+                    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+                    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
                 </div>
             </li>
         </ul>
-
-        <!-- BOTÓN HAMBURGUESA -->
-        <button class="hamburger" onclick="toggleMenu()">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
+        <button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
     </nav>
-
-    <!-- MENÚ MÓVIL -->
     <div class="mobile-menu" id="mobileMenu">
-        <a href="/">Inicio</a>
+        <a href="/pagina_principal">Inicio</a>
         <a href="/inscripcion">Inscripción</a>
         <a href="/reinscripcion">Reinscripción</a>
         <a href="/soporte">Soporte</a>
@@ -58,80 +75,256 @@
         <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
     </div>
 </header>
-<!-- =============== FIN NAVBAR =============== -->
 
-<!-- ================= CONTENIDO ================= -->
 <div class="container">
-
     <div class="univ-header">
-        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}"
-             alt="Logo Universidad"
-             class="univ-logo">
+        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}" alt="Logo Universidad" class="univ-logo">
     </div>
-
     <div class="card">
-        <h2 style="color: var(--nl-green);">
-            Formulario de Inscripción (Nuevo Ingreso)
+        <h2 style="color:var(--nl-green); text-align:center; margin-bottom:25px;">
+            Formulario de Inscripción — Nuevo Ingreso
         </h2>
 
-        <form action="/submit" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="tipo_tramite" value="inscripcion">
-
-            <div class="form-group">
-                <label>Nombre Completo del Alumno</label>
-                <input type="text" name="nombre" placeholder="Ej. Juan Pérez" 
-                    required minlength="10" 
-                    pattern="^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$" 
-                    title="Solo se permiten letras y espacios">
+        <div class="stepper">
+            <div class="step active" id="step-ind-1">
+                <div class="step-circle">1</div>
+                <span class="step-label">Datos<br>Personales</span>
             </div>
-
-            <div class="docs-box">
-            <h4>Carga de Documentación</h4>
-            <div class="form-group">
-                <label>Acta de Nacimiento (Solo PDF)</label>
-                <input type="file" name="doc_acta" required accept=".pdf">
+            <div class="step-line" id="line-1"></div>
+            <div class="step" id="step-ind-2">
+                <div class="step-circle">2</div>
+                <span class="step-label">Datos<br>Académicos</span>
             </div>
-
-            <div class="form-group">
-                <label>Certificado de Bachillerato (PDF o Imagen)</label>
-                <input type="file" name="doc_cert" required accept=".pdf,image/jpeg,image/png">
+            <div class="step-line" id="line-2"></div>
+            <div class="step" id="step-ind-3">
+                <div class="step-circle">3</div>
+                <span class="step-label">Documentos</span>
+            </div>
+            <div class="step-line" id="line-3"></div>
+            <div class="step" id="step-ind-4">
+                <div class="step-circle">4</div>
+                <span class="step-label">Confirmación</span>
             </div>
         </div>
 
-            <button type="submit" class="btn-primary">
-                ENVIAR INSCRIPCIÓN
-            </button>
+        <form action="/inscripcion_submit" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="tipo_tramite" value="inscripcion">
+
+            <!-- PASO 1 -->
+            <div class="form-step active" id="paso-1">
+                <p class="step-title"><i class="fas fa-user"></i> Datos Personales</p>
+                <div class="form-group">
+                    <label>Nombre Completo <span style="color:red">*</span></label>
+                    <input type="text" name="nombre" id="nombre" placeholder="Ej. Juan Carlos Pérez Martínez">
+                </div>
+                <div class="form-group">
+                    <label>CURP <span style="color:red">*</span></label>
+                    <input type="text" name="curp" id="curp" placeholder="Ej. PEGJ990101HNLRZN01" maxlength="18" style="text-transform:uppercase">
+                </div>
+                <div class="form-group">
+                    <label>Fecha de Nacimiento <span style="color:red">*</span></label>
+                    <input type="date" name="fecha_nacimiento" id="fecha_nacimiento">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono de Contacto <span style="color:red">*</span></label>
+                    <input type="tel" name="telefono" id="telefono" placeholder="Ej. 8112345678" maxlength="10">
+                </div>
+                <div class="form-group">
+                    <label>Fotografía <span style="color:red">*</span> <small style="color:#888">(JPG o PNG)</small></label>
+                    <div class="foto-container">
+                        <div class="foto-placeholder" id="fotoPlaceholder"><i class="fas fa-camera"></i></div>
+                        <img id="fotoPreview" class="foto-preview" src="#" alt="Vista previa">
+                    </div>
+                    <input type="file" name="fotografia" id="fotografia" accept="image/jpeg,image/png" style="margin-top:12px; width:100%;">
+                </div>
+                <div class="btn-nav">
+                    <button type="button" class="btn-next" onclick="irPaso(2)">Siguiente <i class="fas fa-arrow-right"></i></button>
+                </div>
+            </div>
+
+            <!-- PASO 2 -->
+            <div class="form-step" id="paso-2">
+                <p class="step-title"><i class="fas fa-graduation-cap"></i> Datos Académicos</p>
+                <div class="form-group">
+                    <label>Carrera a Ingresar <span style="color:red">*</span></label>
+                    <select name="carrera" id="carrera">
+                        <option value="">-- Selecciona una carrera --</option>
+                        <option value="TSU en Tecnologías de la Información">TSU en Tecnologías de la Información</option>
+                        <option value="TSU en Mecatrónica">TSU en Mecatrónica</option>
+                        <option value="TSU en Administración">TSU en Administración</option>
+                        <option value="TSU en Nanotecnología">TSU en Nanotecnología</option>
+                        <option value="TSU en Procesos Industriales">TSU en Procesos Industriales</option>
+                        <option value="Ingeniería en Tecnologías de la Información">Ingeniería en Tecnologías de la Información</option>
+                        <option value="Ingeniería en Mecatrónica">Ingeniería en Mecatrónica</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Nombre del Contacto de Emergencia <span style="color:red">*</span></label>
+                    <input type="text" name="contacto_emergencia_nombre" id="contacto_nombre" placeholder="Ej. María López">
+                </div>
+                <div class="form-group">
+                    <label>Teléfono del Contacto de Emergencia <span style="color:red">*</span></label>
+                    <input type="tel" name="contacto_emergencia_tel" id="contacto_tel" placeholder="Ej. 8119876543" maxlength="10">
+                </div>
+                <div class="btn-nav">
+                    <button type="button" class="btn-prev" onclick="irPaso(1)"><i class="fas fa-arrow-left"></i> Anterior</button>
+                    <button type="button" class="btn-next" onclick="irPaso(3)">Siguiente <i class="fas fa-arrow-right"></i></button>
+                </div>
+            </div>
+
+            <!-- PASO 3 -->
+            <div class="form-step" id="paso-3">
+                <p class="step-title"><i class="fas fa-file-alt"></i> Carga de Documentos</p>
+                <div class="docs-box">
+                    <h4>Documentos Requeridos</h4>
+                    <div class="form-group">
+                        <label>Acta de Nacimiento <span style="color:red">*</span> <small style="color:#888">(Solo PDF)</small></label>
+                        <input type="file" name="doc_acta" id="doc_acta" accept=".pdf">
+                    </div>
+                    <div class="form-group">
+                        <label>Certificado de Bachillerato <span style="color:red">*</span> <small style="color:#888">(PDF o Imagen)</small></label>
+                        <input type="file" name="doc_cert" id="doc_cert" accept=".pdf,image/jpeg,image/png">
+                    </div>
+                    <div class="form-group">
+                        <label>Comprobante de Pago <span style="color:red">*</span> <small style="color:#888">(PDF o Imagen)</small></label>
+                        <input type="file" name="comprobante" id="comprobante" accept=".pdf,image/*">
+                    </div>
+                </div>
+                <div class="btn-nav">
+                    <button type="button" class="btn-prev" onclick="irPaso(2)"><i class="fas fa-arrow-left"></i> Anterior</button>
+                    <button type="button" class="btn-next" onclick="irPaso(4)">Revisar <i class="fas fa-eye"></i></button>
+                </div>
+            </div>
+
+            <!-- PASO 4 -->
+            <div class="form-step" id="paso-4">
+                <p class="step-title"><i class="fas fa-check-circle"></i> Confirma tus Datos</p>
+                <p style="color:#666; font-size:0.9rem; margin-bottom:20px;">Revisa que todo sea correcto antes de enviar.</p>
+                <div class="resumen-bloque">
+                    <h4><i class="fas fa-user"></i> Datos Personales</h4>
+                    <p><strong>Nombre:</strong> <span id="res-nombre">—</span></p>
+                    <p><strong>CURP:</strong> <span id="res-curp">—</span></p>
+                    <p><strong>Fecha de Nacimiento:</strong> <span id="res-fecha">—</span></p>
+                    <p><strong>Teléfono:</strong> <span id="res-telefono">—</span></p>
+                    <p><strong>Fotografía:</strong> <span id="res-foto">—</span></p>
+                </div>
+                <div class="resumen-bloque">
+                    <h4><i class="fas fa-graduation-cap"></i> Datos Académicos</h4>
+                    <p><strong>Carrera:</strong> <span id="res-carrera">—</span></p>
+                    <p><strong>Contacto de Emergencia:</strong> <span id="res-contacto-nombre">—</span></p>
+                    <p><strong>Teléfono Emergencia:</strong> <span id="res-contacto-tel">—</span></p>
+                </div>
+                <div class="resumen-bloque">
+                    <h4><i class="fas fa-file-alt"></i> Documentos</h4>
+                    <p><strong>Acta de Nacimiento:</strong> <span id="res-acta">—</span></p>
+                    <p><strong>Certificado:</strong> <span id="res-cert">—</span></p>
+                    <p><strong>Comprobante de Pago:</strong> <span id="res-comprobante">—</span></p>
+                </div>
+                <div class="btn-nav">
+                    <button type="button" class="btn-prev" onclick="irPaso(3)"><i class="fas fa-arrow-left"></i> Editar</button>
+                    <button type="submit" class="btn-next" style="background-color:var(--nl-green);">
+                        <i class="fas fa-paper-plane"></i> Enviar Inscripción
+                    </button>
+                </div>
+            </div>
         </form>
     </div>
-
 </div>
-<!-- ================= FIN CONTENIDO ================= -->
 
-<!-- ================= FOOTER ================= -->
 <footer class="main-footer">
     <div class="footer-content">
-
         <div class="footer-section">
             <h4>Contacto</h4>
             <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
-            <p><i class="fas fa-envelope"></i> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="1e6d716e716c6a7b5e6b6a6d7d307b7a6b307366">[email&#160;protected]</a></p>
+            <p><i class="fas fa-envelope"></i> soporte@utsc.edu.mx</p>
         </div>
-
-        <div class="footer-section">
-            <h4>Enlaces Rápidos</h4><br>
-            <a href="/inscripcion">Nueva Inscripción</a><br>
-            <a href="/contacto">Ubicación de Planteles</a>
-        </div>
-
         <div class="footer-section">
             <h4>Gobierno de Nuevo León</h4>
             <p>Secretaría de Educación</p>
             <p>© 2026 - Todos los derechos reservados</p>
         </div>
-
     </div>
 </footer>
-<!-- ================= FIN FOOTER ================= -->
 
-<!-- ================= JS ================= -->
-<script data-cfasy
+<script>
+let pasoActual = 1;
+document.getElementById('fecha_nacimiento').max = new Date().toISOString().split('T')[0];
+
+function irPaso(destino) {
+    if (destino > pasoActual && !validarPaso(pasoActual)) return;
+    const stepActual = document.getElementById('step-ind-' + pasoActual);
+    stepActual.classList.remove('active');
+    document.getElementById('paso-' + pasoActual).classList.remove('active');
+    if (destino > pasoActual) {
+        stepActual.classList.add('done');
+        const l = document.getElementById('line-' + pasoActual);
+        if (l) l.classList.add('done');
+    } else {
+        stepActual.classList.remove('done');
+        stepActual.classList.add('active');
+        const l = document.getElementById('line-' + pasoActual);
+        if (l) l.classList.remove('done');
+    }
+    pasoActual = destino;
+    document.getElementById('paso-' + pasoActual).classList.add('active');
+    const stepNuevo = document.getElementById('step-ind-' + pasoActual);
+    stepNuevo.classList.remove('done');
+    stepNuevo.classList.add('active');
+    if (pasoActual === 4) actualizarResumen();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function validarPaso(paso) {
+    if (paso === 1) {
+        if (document.getElementById('nombre').value.trim().length < 10)  { alert('⚠️ Ingresa tu nombre completo (mínimo 10 caracteres).'); return false; }
+        if (document.getElementById('curp').value.trim().length !== 18)  { alert('⚠️ La CURP debe tener exactamente 18 caracteres.'); return false; }
+        if (!document.getElementById('fecha_nacimiento').value)          { alert('⚠️ Ingresa tu fecha de nacimiento.'); return false; }
+        if (document.getElementById('telefono').value.trim().length !== 10) { alert('⚠️ El teléfono debe tener 10 dígitos.'); return false; }
+        if (!document.getElementById('fotografia').files.length)         { alert('⚠️ Sube tu fotografía.'); return false; }
+    }
+    if (paso === 2) {
+        if (!document.getElementById('carrera').value)                   { alert('⚠️ Selecciona una carrera.'); return false; }
+        if (!document.getElementById('contacto_nombre').value.trim())    { alert('⚠️ Ingresa el nombre del contacto de emergencia.'); return false; }
+        if (document.getElementById('contacto_tel').value.trim().length !== 10) { alert('⚠️ El teléfono de emergencia debe tener 10 dígitos.'); return false; }
+    }
+    if (paso === 3) {
+        if (!document.getElementById('doc_acta').files.length)    { alert('⚠️ Sube el Acta de Nacimiento.'); return false; }
+        if (!document.getElementById('doc_cert').files.length)    { alert('⚠️ Sube el Certificado de Bachillerato.'); return false; }
+        if (!document.getElementById('comprobante').files.length) { alert('⚠️ Sube el Comprobante de Pago.'); return false; }
+    }
+    return true;
+}
+
+function actualizarResumen() {
+    const v = id => document.getElementById(id).value || '—';
+    const f = id => { const files = document.getElementById(id).files; return files.length ? '✅ ' + files[0].name : '❌ Sin archivo'; };
+    document.getElementById('res-nombre').textContent          = v('nombre');
+    document.getElementById('res-curp').textContent            = v('curp');
+    document.getElementById('res-fecha').textContent           = v('fecha_nacimiento');
+    document.getElementById('res-telefono').textContent        = v('telefono');
+    document.getElementById('res-foto').textContent            = f('fotografia');
+    document.getElementById('res-carrera').textContent         = v('carrera');
+    document.getElementById('res-contacto-nombre').textContent = v('contacto_nombre');
+    document.getElementById('res-contacto-tel').textContent    = v('contacto_tel');
+    document.getElementById('res-acta').textContent            = f('doc_acta');
+    document.getElementById('res-cert').textContent            = f('doc_cert');
+    document.getElementById('res-comprobante').textContent     = f('comprobante');
+}
+
+document.getElementById('fotografia').addEventListener('change', function () {
+    const file = this.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            document.getElementById('fotoPreview').src = e.target.result;
+            document.getElementById('fotoPreview').style.display = 'block';
+            document.getElementById('fotoPlaceholder').style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
+</script>
+</body>
+</html>

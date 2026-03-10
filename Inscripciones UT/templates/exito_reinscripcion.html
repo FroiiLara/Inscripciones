@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reinscripción Exitosa | UTSC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <style>
+        .exito-center { text-align:center; padding:10px 0; }
+        .icono-exito  { font-size:80px; color:var(--nl-green); margin-bottom:15px; animation:pop 0.5s ease; }
+        @keyframes pop { 0%{transform:scale(0.5);opacity:0} 80%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+        .folio-box { background:linear-gradient(135deg, var(--nl-green), #035e5b); color:white; border-radius:12px; padding:18px 35px; display:inline-block; margin:20px 0; }
+        .folio-box p  { margin:0; font-size:0.9rem; opacity:0.85; }
+        .folio-box h2 { margin:6px 0 0; font-size:2rem; letter-spacing:3px; }
+        .datos-resumen { background:#f8f9fa; border-radius:10px; padding:20px 25px; text-align:left; margin:20px 0; }
+        .datos-resumen h4 { color:var(--nl-green); margin-top:0; border-bottom:2px solid var(--nl-orange); padding-bottom:8px; }
+        .datos-resumen p  { margin:7px 0; font-size:0.95rem; }
+        .tag-materia { display:inline-block; background:var(--nl-green); color:white; font-size:0.78rem; padding:3px 10px; border-radius:20px; margin:3px; }
+        .aviso { background-color:#fff8e1; border-left:4px solid var(--nl-orange); padding:14px 18px; border-radius:6px; margin:20px 0; font-size:0.9rem; color:#555; text-align:left; }
+        .btn-group-exito { display:flex; gap:15px; justify-content:center; flex-wrap:wrap; margin-top:25px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <nav class="navbar">
+        <div class="navbar-left">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" class="nav-logo" alt="Gobierno NL">
+            <span class="navbar-title">Gobierno de Nuevo León</span>
+        </div>
+        <ul class="navbar-menu">
+            <li><a href="/pagina_principal">Inicio</a></li>
+            <li><a href="/inscripcion">Inscripción</a></li>
+            <li><a href="/reinscripcion">Reinscripción</a></li>
+            <li><a href="/soporte">Soporte</a></li>
+            <li class="dropdown">
+                <button class="dropbtn">{{ usuario[0].upper() if usuario else 'U' }}</button>
+                <div class="dropdown-content">
+                    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+                    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+                </div>
+            </li>
+        </ul>
+        <button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
+    </nav>
+    <div class="mobile-menu" id="mobileMenu">
+        <a href="/pagina_principal">Inicio</a>
+        <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+        <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+    </div>
+</header>
+
+<div class="container">
+    <div class="univ-header">
+        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}" alt="Logo Universidad" class="univ-logo">
+    </div>
+    <div class="card">
+        <div class="exito-center">
+            <div class="icono-exito"><i class="fas fa-check-circle"></i></div>
+            <h2 style="color:var(--nl-green);">¡Reinscripción Exitosa!</h2>
+            <p style="color:#666;">Tu solicitud fue recibida. Guarda tu número de folio.</p>
+
+            <div class="folio-box">
+                <p>Número de Folio</p>
+                <h2>{{ folio }}</h2>
+            </div>
+
+            <div class="datos-resumen">
+                <h4><i class="fas fa-id-card"></i> Resumen de tu Reinscripción</h4>
+                <p><strong>Matrícula:</strong> {{ matricula }}</p>
+                <p><strong>Nombre:</strong> {{ nombre }}</p>
+                <p><strong>Correo:</strong> {{ correo }}</p>
+                <p><strong>Cuatrimestre:</strong> {{ cuatrimestre }}° Cuatrimestre</p>
+                <p><strong>Referencia de Pago:</strong> {{ referencia_pago }}</p>
+                <p><strong>Materias inscritas:</strong></p>
+                <div style="margin-top:6px;">
+                    {% for materia in materias %}
+                        <span class="tag-materia">{{ materia }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="aviso">
+                <i class="fas fa-info-circle" style="color:var(--nl-orange)"></i>
+                <strong> Próximos pasos:</strong> Control Escolar validará tu pago y materias
+                en un plazo de <strong>2 a 3 días hábiles</strong>. Recibirás confirmación
+                a tu correo institucional.
+            </div>
+
+            <div class="btn-group-exito">
+                <a href="/pagina_principal" class="btn-primary">
+                    <i class="fas fa-home"></i> Ir al Inicio
+                </a>
+                <a href="/mi_perfil" class="btn-primary" style="background-color:var(--nl-green);">
+                    <i class="fas fa-user"></i> Ver Mi Perfil
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<footer class="main-footer">
+    <div class="footer-content">
+        <div class="footer-section">
+            <h4>Contacto</h4>
+            <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
+            <p><i class="fas fa-envelope"></i> soporte@utsc.edu.mx</p>
+        </div>
+        <div class="footer-section">
+            <h4>Gobierno de Nuevo León</h4>
+            <p>Secretaría de Educación</p>
+            <p>© 2026 - Todos los derechos reservados</p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import os
 import re
+import uuid
 from datetime import timedelta
 from dotenv import load_dotenv
 from flask import (
@@ -11,6 +12,7 @@ from pymongo import MongoClient
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from itsdangerous import URLSafeTimedSerializer as Serializer, BadSignature, SignatureExpired
+from werkzeug.utils import secure_filename
 
 from flask_jwt_extended import (
     JWTManager,
@@ -34,42 +36,44 @@ app.secret_key = os.environ.get("SECRET_KEY")
 bcrypt = Bcrypt(app)
 
 # ================= JWT CONFIG =================
-app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY")
-app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
-app.config["JWT_ACCESS_COOKIE_PATH"] = "/"
-app.config["JWT_COOKIE_CSRF_PROTECT"] = False  # En producción poner True
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
+app.config["JWT_SECRET_KEY"]          = os.environ.get("JWT_SECRET_KEY")
+app.config["JWT_TOKEN_LOCATION"]      = ["cookies"]
+app.config["JWT_ACCESS_COOKIE_PATH"]  = "/"
+app.config["JWT_COOKIE_CSRF_PROTECT"] = False   # En producción: True
+app.config["JWT_ACCESS_TOKEN_EXPIRES"]= timedelta(hours=1)
 
 jwt = JWTManager(app)
 
 # ================= MONGODB =================
 MONGO_URI = os.environ.get("MONGO_URI")
-client = MongoClient(MONGO_URI)
-db = client["Users"]
-collection = db["Users"]
+client    = MongoClient(MONGO_URI)
+db        = client["Users"]
+collection        = db["Users"]
+inscripciones_col = db["Inscripciones"]   # ← Nueva colección
+
+# ================= UPLOADS =================
+UPLOAD_FOLDER     = os.path.join('static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)   # Se crea automáticamente si no existe
+ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # ================= SENDGRID =================
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
-FROM_EMAIL = os.environ.get("FROM_EMAIL")
+FROM_EMAIL       = os.environ.get("FROM_EMAIL")
 
 # ================= SERIALIZER =================
 serializer = Serializer(app.secret_key, salt="password-reset-salt")
 
 # ======================================================
-# UTILIDADES DE SEGURIDAD (PREVENCIÓN DE INYECCIÓN)
+# UTILIDADES DE SEGURIDAD
 # ======================================================
 
 def validar_no_sql_injection(dato):
-    """
-    Bloquea el uso de diccionarios u operadores de MongoDB ($) 
-    en campos de texto para prevenir NoSQL Injection.
-    """
     if isinstance(dato, dict): return False
-    # Evita que el usuario envíe operadores de consulta de MongoDB
     if "$" in str(dato): return False
     return True
-
-
 
 # ======================================================
 # CONTEXT PROCESSOR
@@ -84,7 +88,6 @@ def inject_user():
         usuario = None
     return dict(usuario=usuario)
 
-
 # ======================================================
 # FUNCIÓN PARA ENVIAR EMAIL
 # ======================================================
@@ -97,15 +100,14 @@ def enviar_email(destinatario, asunto, cuerpo):
         html_content=cuerpo
     )
     try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)  
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
         response = sg.send(mensaje)
         print(f"Correo enviado con éxito! Status code: {response.status_code}")
     except Exception as e:
         print(f"Error al enviar el correo: {e}")
 
-
 # ======================================================
-# RUTAS
+# RUTAS PÚBLICAS
 # ======================================================
 
 @app.route('/')
@@ -116,20 +118,17 @@ def home():
 @app.route('/registro', methods=['GET', 'POST'])
 def registro():
     if request.method == 'POST':
-        # SANITIZACIÓN Y PREVENCIÓN DE INYECCIÓN
-        usuario = str(request.form.get('usuario', '')).strip()
-        email = str(request.form.get('email', '')).lower().strip()
-        contrasena = str(request.form.get('contrasena', ''))
+        usuario   = str(request.form.get('usuario', '')).strip()
+        email     = str(request.form.get('email', '')).lower().strip()
+        contrasena= str(request.form.get('contrasena', ''))
 
-        # Validación de integridad de datos
         if not usuario or not email or not contrasena:
             abort(400)
-        
+
         if not validar_no_sql_injection(usuario) or not validar_no_sql_injection(email):
             flash("Caracteres no permitidos detectados.", "error")
             return redirect(url_for('registro'))
 
-        # Validación de lógica de negocio (Email Institucional)
         if not email.endswith("@virtual.utsc.edu.mx"):
             flash("Debe usar un correo institucional @virtual.utsc.edu.mx", "error")
             return redirect(url_for('registro'))
@@ -139,12 +138,7 @@ def registro():
             return redirect(url_for('registro'))
 
         hashed = bcrypt.generate_password_hash(contrasena).decode('utf-8')
-
-        collection.insert_one({
-            'usuario': usuario,
-            'email': email,
-            'contrasena': hashed
-        })
+        collection.insert_one({'usuario': usuario, 'email': email, 'contrasena': hashed})
 
         flash("Registro exitoso. Inicia sesión.", "success")
         return redirect(url_for('login'))
@@ -155,19 +149,17 @@ def registro():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        # SANITIZACIÓN
-        usuario = str(request.form.get('usuario', '')).strip()
-        contrasena = str(request.form.get('contrasena', ''))
+        usuario   = str(request.form.get('usuario', '')).strip()
+        contrasena= str(request.form.get('contrasena', ''))
 
         if not usuario or not contrasena:
             abort(400)
 
-        # Seguridad NoSQL: Forzamos búsqueda por string exacto
         user = collection.find_one({'usuario': {"$eq": usuario}})
 
         if user and bcrypt.check_password_hash(user['contrasena'], contrasena):
             access_token = create_access_token(identity=usuario)
-            response = redirect(url_for('pagina_principal'))
+            response     = redirect(url_for('pagina_principal'))
             set_access_cookies(response, access_token)
             return response
 
@@ -184,8 +176,9 @@ def logout():
     unset_jwt_cookies(response)
     return response
 
-
-# ================= PÁGINAS PROTEGIDAS =================
+# ======================================================
+# PÁGINAS PROTEGIDAS
+# ======================================================
 
 @app.route('/pagina_principal')
 @jwt_required()
@@ -197,7 +190,7 @@ def pagina_principal():
 @app.route('/mi_perfil')
 @jwt_required()
 def mi_perfil():
-    usuario = get_jwt_identity()
+    usuario   = get_jwt_identity()
     user_data = collection.find_one({'usuario': usuario})
     if not user_data:
         abort(404)
@@ -224,17 +217,178 @@ def soporte():
     usuario = get_jwt_identity()
     return render_template('soporte.html', usuario=usuario)
 
+# ======================================================
+# INSCRIPCIÓN — PROCESAR FORMULARIO MULTI-PASO
+# ======================================================
 
-# ================= RECUPERACIÓN =================
+@app.route('/inscripcion_submit', methods=['POST'])
+@jwt_required()
+def inscripcion_submit():
+    usuario = get_jwt_identity()
+
+    # ===== LEER CAMPOS =====
+    nombre      = request.form.get('nombre', '').strip()
+    curp        = request.form.get('curp', '').strip().upper()
+    fecha_nac   = request.form.get('fecha_nacimiento', '').strip()
+    telefono    = request.form.get('telefono', '').strip()
+    carrera     = request.form.get('carrera', '').strip()
+    cont_nombre = request.form.get('contacto_emergencia_nombre', '').strip()
+    cont_tel    = request.form.get('contacto_emergencia_tel', '').strip()
+
+    # ===== VALIDACIÓN BACKEND =====
+    if not all([nombre, curp, fecha_nac, telefono, carrera, cont_nombre, cont_tel]):
+        flash("Todos los campos son obligatorios.", "error")
+        return redirect(url_for('inscripcion'))
+
+    # ===== GUARDAR ARCHIVOS =====
+    def guardar_archivo(campo):
+        archivo = request.files.get(campo)
+        if archivo and allowed_file(archivo.filename):
+            nombre_seguro = secure_filename(archivo.filename)
+            nombre_unico  = f"{uuid.uuid4().hex}_{nombre_seguro}"
+            archivo.save(os.path.join(UPLOAD_FOLDER, nombre_unico))
+            return nombre_unico
+        return None
+
+    foto        = guardar_archivo('fotografia')
+    doc_acta    = guardar_archivo('doc_acta')
+    doc_cert    = guardar_archivo('doc_cert')
+    comprobante = guardar_archivo('comprobante')
+
+    if not all([foto, doc_acta, doc_cert, comprobante]):
+        flash("Todos los documentos son obligatorios.", "error")
+        return redirect(url_for('inscripcion'))
+
+    # ===== GENERAR FOLIO =====
+    folio = 'UTSC-' + uuid.uuid4().hex[:8].upper()
+
+    # ===== GUARDAR EN MONGODB =====
+    inscripciones_col.insert_one({
+        'usuario'                   : usuario,
+        'folio'                     : folio,
+        'nombre'                    : nombre,
+        'curp'                      : curp,
+        'fecha_nacimiento'          : fecha_nac,
+        'telefono'                  : telefono,
+        'carrera'                   : carrera,
+        'contacto_emergencia_nombre': cont_nombre,
+        'contacto_emergencia_tel'   : cont_tel,
+        'fotografia'                : foto,
+        'doc_acta'                  : doc_acta,
+        'doc_cert'                  : doc_cert,
+        'comprobante'               : comprobante,
+        'estatus'                   : 'En revisión'
+    })
+
+    return render_template('exito_inscripcion.html',
+        usuario                    = usuario,
+        folio                      = folio,
+        nombre                     = nombre,
+        curp                       = curp,
+        fecha_nacimiento           = fecha_nac,
+        telefono                   = telefono,
+        carrera                    = carrera,
+        contacto_emergencia_nombre = cont_nombre,
+        contacto_emergencia_tel    = cont_tel
+    )
+
+# ======================================================
+# REINSCRIPCIÓN — PROCESAR FORMULARIO MULTI-PASO
+# ======================================================
+
+@app.route('/reinscripcion_submit', methods=['POST'])
+@jwt_required()
+def reinscripcion_submit():
+    import json
+    usuario = get_jwt_identity()
+
+    # ===== LEER CAMPOS =====
+    matricula       = request.form.get('matricula', '').strip()
+    nombre          = request.form.get('nombre', '').strip()
+    correo          = request.form.get('correo', '').strip().lower()
+    telefono        = request.form.get('telefono', '').strip()
+    cuatrimestre    = request.form.get('cuatrimestre', '').strip()
+    referencia_pago = request.form.get('referencia_pago', '').strip()
+    fecha_pago      = request.form.get('fecha_pago', '').strip()
+
+    # Materias vienen como JSON: ["MAT201|Cálculo Diferencial", ...]
+    materias_raw = request.form.get('materias', '[]')
+    try:
+        materias_lista = json.loads(materias_raw)
+        # Convertir "CLAVE|Nombre" → solo el nombre legible
+        materias = [m.split('|')[1] if '|' in m else m for m in materias_lista]
+    except Exception:
+        materias = []
+
+    # ===== VALIDACIÓN BACKEND =====
+    if not all([matricula, nombre, correo, telefono, cuatrimestre, referencia_pago, fecha_pago]):
+        flash("Todos los campos son obligatorios.", "error")
+        return redirect(url_for('reinscripcion'))
+
+    if not materias:
+        flash("Debes seleccionar al menos una materia.", "error")
+        return redirect(url_for('reinscripcion'))
+
+    # ===== GUARDAR COMPROBANTE =====
+    def guardar_archivo(campo):
+        archivo = request.files.get(campo)
+        if archivo and allowed_file(archivo.filename):
+            nombre_seguro = secure_filename(archivo.filename)
+            nombre_unico  = f"{uuid.uuid4().hex}_{nombre_seguro}"
+            archivo.save(os.path.join(UPLOAD_FOLDER, nombre_unico))
+            return nombre_unico
+        return None
+
+    comprobante = guardar_archivo('comprobante')
+    if not comprobante:
+        flash("El comprobante de pago es obligatorio.", "error")
+        return redirect(url_for('reinscripcion'))
+
+    # ===== GENERAR FOLIO =====
+    folio = 'REINSC-' + uuid.uuid4().hex[:8].upper()
+
+    # ===== GUARDAR EN MONGODB =====
+    reinscripciones_col = db["Reinscripciones"]
+    reinscripciones_col.insert_one({
+        'usuario'        : usuario,
+        'folio'          : folio,
+        'matricula'      : matricula,
+        'nombre'         : nombre,
+        'correo'         : correo,
+        'telefono'       : telefono,
+        'cuatrimestre'   : cuatrimestre,
+        'materias'       : materias,
+        'comprobante'    : comprobante,
+        'fecha_pago'     : fecha_pago,
+        'referencia_pago': referencia_pago,
+        'estatus'        : 'En revisión'
+    })
+
+    return render_template('exito_reinscripcion.html',
+        usuario         = usuario,
+        folio           = folio,
+        matricula       = matricula,
+        nombre          = nombre,
+        correo          = correo,
+        cuatrimestre    = cuatrimestre,
+        materias        = materias,
+        referencia_pago = referencia_pago,
+        fecha_pago      = fecha_pago
+    )
+
+
+# ======================================================
+# RECUPERACIÓN DE CONTRASEÑA
+# ======================================================
 
 @app.route('/recuperar_contrasena', methods=['GET', 'POST'])
 def recuperar_contrasena():
     if request.method == 'POST':
-        email = request.form['email']
+        email   = request.form['email']
         usuario = collection.find_one({'email': email})
 
         if usuario:
-            token = serializer.dumps(email, salt='password-reset-salt')
+            token  = serializer.dumps(email, salt='password-reset-salt')
             enlace = url_for('restablecer_contrasena', token=token, _external=True)
             asunto = "Recuperación de contraseña"
             cuerpo = f"""
@@ -250,37 +404,39 @@ def recuperar_contrasena():
 
     return render_template('recuperar_contrasena.html')
 
+
 @app.route('/restablecer_contrasena/<token>', methods=['GET', 'POST'])
 def restablecer_contrasena(token):
     try:
         email = serializer.loads(token, salt='password-reset-salt', max_age=3600)
-    except:
+    except (SignatureExpired, BadSignature):
         flash("El enlace de restablecimiento ha caducado o es inválido.", "error")
         return redirect(url_for('recuperar_contrasena'))
 
     if request.method == 'POST':
         nueva_contrasena = request.form['nueva_contrasena']
-        hashed_password = bcrypt.generate_password_hash(nueva_contrasena).decode('utf-8')
+        hashed_password  = bcrypt.generate_password_hash(nueva_contrasena).decode('utf-8')
         collection.update_one({'email': email}, {'$set': {'contrasena': hashed_password}})
         flash("Tu contraseña ha sido restablecida con éxito.", "success")
         return redirect(url_for('login'))
 
     return render_template('restablecer_contrasena.html')
 
-
-# ================= ERRORES =================
+# ======================================================
+# MANEJADORES DE ERRORES
+# ======================================================
 
 @app.errorhandler(400)
-def bad_request(e): return render_template("400.html"), 400
+def bad_request(e):      return render_template("400.html"), 400
 
 @app.errorhandler(401)
-def unauthorized(e): return render_template("401.html"), 401
+def unauthorized(e):     return render_template("401.html"), 401
 
 @app.errorhandler(404)
-def not_found(e): return render_template("404.html"), 404
+def not_found(e):        return render_template("404.html"), 404
 
 @app.errorhandler(500)
-def internal_error(e): return render_template("500.html"), 500
+def internal_error(e):   return render_template("500.html"), 500
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(e):

@@ -3,56 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Escolar Nuevo León</title>
+    <title>Reinscripción | UTSC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
-</head>
+    <style>
+        .stepper { display:flex; align-items:center; margin-bottom:35px; }
+        .step { display:flex; flex-direction:column; align-items:center; flex:1; }
+        .step-circle { width:40px; height:40px; border-radius:50%; background-color:#ddd; color:#999; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:15px; transition:all 0.3s; }
+        .step.active .step-circle { background-color:var(--nl-orange); color:white; }
+        .step.done   .step-circle { background-color:var(--nl-green);  color:white; }
+        .step-label { font-size:0.7rem; margin-top:6px; color:#999; text-align:center; line-height:1.3; }
+        .step.active .step-label { color:var(--nl-orange); font-weight:600; }
+        .step.done   .step-label { color:var(--nl-green); }
+        .step-line { flex:1; height:3px; background-color:#ddd; margin-bottom:24px; transition:background-color 0.3s; }
+        .step-line.done { background-color:var(--nl-green); }
+        .form-step { display:none; }
+        .form-step.active { display:block; }
+        .step-title { color:var(--nl-green); font-size:1.05rem; font-weight:600; border-bottom:2px solid var(--nl-orange); padding-bottom:8px; margin-bottom:22px; }
+        .btn-nav { display:flex; justify-content:space-between; margin-top:28px; gap:12px; }
+        .btn-prev { background-color:#6c757d; color:white; border:none; padding:12px 28px; border-radius:6px; font-size:15px; font-weight:bold; cursor:pointer; }
+        .btn-prev:hover { background-color:#5a6268; }
+        .btn-next { background-color:var(--nl-orange); color:white; border:none; padding:12px 28px; border-radius:6px; font-size:15px; font-weight:bold; cursor:pointer; margin-left:auto; }
+        .btn-next:hover { background-color:#e67e00; }
 
+        /* Materias */
+        .materias-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:12px; margin-top:10px; }
+        .materia-card { background:#f8f9fa; border:2px solid #ddd; border-radius:8px; padding:12px 15px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:10px; }
+        .materia-card:hover { border-color:var(--nl-orange); background:#fff8f0; }
+        .materia-card.seleccionada { border-color:var(--nl-green); background:#e8f5e9; }
+        .materia-card input[type="checkbox"] { display:none; }
+        .check-icon { font-size:1.1rem; color:#ccc; transition:color 0.2s; min-width:18px; }
+        .materia-card.seleccionada .check-icon { color:var(--nl-green); }
+        .materia-nombre { font-size:0.88rem; font-weight:500; color:#333; }
+        .materia-clave  { font-size:0.75rem; color:#888; }
+        .materias-contador { font-size:0.85rem; color:#666; margin-top:10px; padding:8px 12px; background:#f0f0f0; border-radius:6px; display:inline-block; }
+
+        /* Resumen */
+        .resumen-bloque { background:#f8f9fa; border-radius:10px; padding:18px 22px; margin-bottom:16px; }
+        .resumen-bloque h4 { color:var(--nl-green); margin-top:0; border-bottom:1px solid #ddd; padding-bottom:8px; }
+        .resumen-bloque p  { margin:6px 0; font-size:0.92rem; }
+        .tag-materia { display:inline-block; background:var(--nl-green); color:white; font-size:0.78rem; padding:3px 10px; border-radius:20px; margin:3px; }
+
+        select, input[type="date"] { width:100%; padding:12px; border-radius:6px; border:1px solid #ccc; font-size:15px; font-family:'Poppins',sans-serif; background-color:white; box-sizing:border-box; }
+        select:focus, input[type="date"]:focus { outline:none; border-color:var(--nl-orange); box-shadow:0 0 0 2px rgba(255,138,0,0.2); }
+    </style>
+</head>
 <body>
 
-<!-- ================= NAVBAR ================= -->
+<!-- ===== NAVBAR ===== -->
 <header>
     <nav class="navbar">
         <div class="navbar-left">
             <img src="{{ url_for('static', filename='img/logo.png') }}" class="nav-logo" alt="Gobierno NL">
             <span class="navbar-title">Gobierno de Nuevo León</span>
         </div>
-
         <ul class="navbar-menu">
             <li><a href="/pagina_principal">Inicio</a></li>
             <li><a href="/inscripcion">Inscripción</a></li>
             <li><a href="/reinscripcion" class="active">Reinscripción</a></li>
             <li><a href="/soporte">Soporte</a></li>
-
-            <!-- PERFIL -->
             <li class="dropdown">
-                <button class="dropbtn">
-                    {{ usuario[0].upper() if usuario else 'U' }}
-                </button>
+                <button class="dropbtn">{{ usuario[0].upper() if usuario else 'U' }}</button>
                 <div class="dropdown-content">
-                    <a href="/mi_perfil">
-                        <i class="fas fa-user"></i> Mi Perfil
-                    </a>
-                    <a href="/logout">
-                        <i class="fas fa-sign-out-alt"></i> Cerrar sesión
-                    </a>
+                    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+                    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
                 </div>
             </li>
         </ul>
-
-        <!-- BOTÓN HAMBURGUESA -->
-        <button class="hamburger" onclick="toggleMenu()">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
+        <button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
     </nav>
-
-    <!-- MENÚ MÓVIL -->
     <div class="mobile-menu" id="mobileMenu">
-        <a href="/">Inicio</a>
+        <a href="/pagina_principal">Inicio</a>
         <a href="/inscripcion">Inscripción</a>
         <a href="/reinscripcion">Reinscripción</a>
         <a href="/soporte">Soporte</a>
@@ -60,74 +83,370 @@
         <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
     </div>
 </header>
-<!-- =============== FIN NAVBAR =============== -->
 
-<!-- ================= CONTENIDO ================= -->
+<!-- ===== CONTENIDO ===== -->
 <div class="container">
-
     <div class="univ-header">
-        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}"
-             alt="Logo Universidad"
-             class="univ-logo">
+        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}" alt="Logo Universidad" class="univ-logo">
     </div>
 
     <div class="card">
-        <h2 style="color: var(--nl-green);">
+        <h2 style="color:var(--nl-green); text-align:center; margin-bottom:25px;">
             Trámite de Reinscripción
         </h2>
 
-        <form action="/submit" method="POST" enctype="multipart/form-data">
+        <!-- STEPPER -->
+        <div class="stepper">
+            <div class="step active" id="step-ind-1">
+                <div class="step-circle">1</div>
+                <span class="step-label">Datos<br>Alumno</span>
+            </div>
+            <div class="step-line" id="line-1"></div>
+            <div class="step" id="step-ind-2">
+                <div class="step-circle">2</div>
+                <span class="step-label">Cuatrimestre<br>y Materias</span>
+            </div>
+            <div class="step-line" id="line-2"></div>
+            <div class="step" id="step-ind-3">
+                <div class="step-circle">3</div>
+                <span class="step-label">Comprobante<br>de Pago</span>
+            </div>
+            <div class="step-line" id="line-3"></div>
+            <div class="step" id="step-ind-4">
+                <div class="step-circle">4</div>
+                <span class="step-label">Confirmación</span>
+            </div>
+        </div>
+
+        <!-- FORMULARIO -->
+        <form action="/reinscripcion_submit" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="tipo_tramite" value="reinscripcion">
 
-            <div class="form-group">
-                <label>Matrícula del Alumno</label>
-                <input type="text" name="matricula" placeholder="12345678" 
-                    required pattern="\d{8,10}" 
-                    title="La matrícula debe ser de 8 a 10 dígitos numéricos">
+            <!-- PASO 1: Datos del Alumno -->
+            <div class="form-step active" id="paso-1">
+                <p class="step-title"><i class="fas fa-id-card"></i> Datos del Alumno</p>
+
+                <div class="form-group">
+                    <label>Matrícula <span style="color:red">*</span></label>
+                    <input type="text" name="matricula" id="matricula"
+                        placeholder="Ej. 202312345" maxlength="10"
+                        title="Entre 8 y 10 dígitos numéricos">
+                </div>
+
+                <div class="form-group">
+                    <label>Nombre Completo <span style="color:red">*</span></label>
+                    <input type="text" name="nombre" id="nombre"
+                        placeholder="Ej. Juan Carlos Pérez Martínez">
+                </div>
+
+                <div class="form-group">
+                    <label>Correo Institucional <span style="color:red">*</span></label>
+                    <input type="email" name="correo" id="correo"
+                        placeholder="alumno@virtual.utsc.edu.mx">
+                </div>
+
+                <div class="form-group">
+                    <label>Teléfono <span style="color:red">*</span></label>
+                    <input type="tel" name="telefono" id="telefono"
+                        placeholder="Ej. 8112345678" maxlength="10">
+                </div>
+
+                <div class="btn-nav">
+                    <button type="button" class="btn-next" onclick="irPaso(2)">
+                        Siguiente <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
             </div>
 
-            
-            <div class="form-group">
-                <label>Comprobante de Pago (PDF/Imagen)</label>
-                <input type="file" name="comprobante" required accept=".pdf,image/*">
+            <!-- PASO 2: Cuatrimestre y Materias -->
+            <div class="form-step" id="paso-2">
+                <p class="step-title"><i class="fas fa-book"></i> Cuatrimestre y Materias</p>
+
+                <div class="form-group">
+                    <label>Cuatrimestre a Cursar <span style="color:red">*</span></label>
+                    <select name="cuatrimestre" id="cuatrimestre" onchange="actualizarMaterias()">
+                        <option value="">-- Selecciona el cuatrimestre --</option>
+                        <option value="2">2° Cuatrimestre</option>
+                        <option value="3">3° Cuatrimestre</option>
+                        <option value="4">4° Cuatrimestre</option>
+                        <option value="5">5° Cuatrimestre</option>
+                        <option value="6">6° Cuatrimestre</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="materias-container" style="display:none;">
+                    <label>Materias a Cursar <span style="color:red">*</span>
+                        <small style="color:#888; font-weight:400"> — Selecciona al menos 1</small>
+                    </label>
+                    <div class="materias-grid" id="materias-grid"></div>
+                    <span class="materias-contador" id="materias-contador">0 materias seleccionadas</span>
+                </div>
+
+                <input type="hidden" name="materias" id="materias-hidden">
+
+                <div class="btn-nav">
+                    <button type="button" class="btn-prev" onclick="irPaso(1)">
+                        <i class="fas fa-arrow-left"></i> Anterior
+                    </button>
+                    <button type="button" class="btn-next" onclick="irPaso(3)">
+                        Siguiente <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
             </div>
 
-            <button type="submit"
-                    class="btn-primary"
-                    style="background-color: var(--nl-green);">
-                PROCESAR REINSCRIPCIÓN
-            </button>
+            <!-- PASO 3: Comprobante de Pago -->
+            <div class="form-step" id="paso-3">
+                <p class="step-title"><i class="fas fa-receipt"></i> Comprobante de Pago</p>
+
+                <div class="docs-box">
+                    <h4>Datos del Pago</h4>
+
+                    <div class="form-group">
+                        <label>Comprobante de Pago <span style="color:red">*</span>
+                            <small style="color:#888">(PDF o Imagen)</small>
+                        </label>
+                        <input type="file" name="comprobante" id="comprobante" accept=".pdf,image/*">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Fecha de Pago <span style="color:red">*</span></label>
+                        <input type="date" name="fecha_pago" id="fecha_pago">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Referencia / Número de Operación <span style="color:red">*</span></label>
+                        <input type="text" name="referencia_pago" id="referencia_pago"
+                            placeholder="Ej. OP-20260310-001" maxlength="30">
+                    </div>
+                </div>
+
+                <div class="btn-nav">
+                    <button type="button" class="btn-prev" onclick="irPaso(2)">
+                        <i class="fas fa-arrow-left"></i> Anterior
+                    </button>
+                    <button type="button" class="btn-next" onclick="irPaso(4)">
+                        Revisar <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PASO 4: Confirmación -->
+            <div class="form-step" id="paso-4">
+                <p class="step-title"><i class="fas fa-check-circle"></i> Confirma tu Reinscripción</p>
+                <p style="color:#666; font-size:0.9rem; margin-bottom:20px;">
+                    Revisa que todo sea correcto antes de enviar.
+                </p>
+
+                <div class="resumen-bloque">
+                    <h4><i class="fas fa-id-card"></i> Datos del Alumno</h4>
+                    <p><strong>Matrícula:</strong> <span id="res-matricula">—</span></p>
+                    <p><strong>Nombre:</strong> <span id="res-nombre">—</span></p>
+                    <p><strong>Correo:</strong> <span id="res-correo">—</span></p>
+                    <p><strong>Teléfono:</strong> <span id="res-telefono">—</span></p>
+                </div>
+
+                <div class="resumen-bloque">
+                    <h4><i class="fas fa-book"></i> Cuatrimestre y Materias</h4>
+                    <p><strong>Cuatrimestre:</strong> <span id="res-cuatrimestre">—</span></p>
+                    <p><strong>Materias:</strong></p>
+                    <div id="res-materias" style="margin-top:6px;">—</div>
+                </div>
+
+                <div class="resumen-bloque">
+                    <h4><i class="fas fa-receipt"></i> Pago</h4>
+                    <p><strong>Comprobante:</strong> <span id="res-comprobante">—</span></p>
+                    <p><strong>Fecha de Pago:</strong> <span id="res-fecha-pago">—</span></p>
+                    <p><strong>Referencia:</strong> <span id="res-referencia">—</span></p>
+                </div>
+
+                <div class="btn-nav">
+                    <button type="button" class="btn-prev" onclick="irPaso(3)">
+                        <i class="fas fa-arrow-left"></i> Editar
+                    </button>
+                    <button type="submit" class="btn-next" style="background-color:var(--nl-green);">
+                        <i class="fas fa-paper-plane"></i> Procesar Reinscripción
+                    </button>
+                </div>
+            </div>
+
         </form>
     </div>
-
 </div>
-<!-- ================= FIN CONTENIDO ================= -->
 
-<!-- ================= FOOTER ================= -->
+<!-- ===== FOOTER ===== -->
 <footer class="main-footer">
     <div class="footer-content">
-
         <div class="footer-section">
             <h4>Contacto</h4>
             <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
-            <p><i class="fas fa-envelope"></i> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="dcafb3acb3aea8b99ca9a8afbff2b9b8a9f2b1a4">[email&#160;protected]</a></p>
+            <p><i class="fas fa-envelope"></i> soporte@utsc.edu.mx</p>
         </div>
-
         <div class="footer-section">
             <h4>Enlaces Rápidos</h4><br>
             <a href="/inscripcion">Nueva Inscripción</a><br>
-            <a href="/contacto">Ubicación de Planteles</a>
+            <a href="/reinscripcion">Reinscripción</a>
         </div>
-
         <div class="footer-section">
             <h4>Gobierno de Nuevo León</h4>
             <p>Secretaría de Educación</p>
             <p>© 2026 - Todos los derechos reservados</p>
         </div>
-
     </div>
 </footer>
-<!-- ================= FIN FOOTER ================= -->
 
-<!-- ================= JS ================= -->
-<script data-cfasy
+<script>
+let pasoActual = 1;
+document.getElementById('fecha_pago').max = new Date().toISOString().split('T')[0];
+
+// ===== CATÁLOGO DE MATERIAS =====
+const catalogoMaterias = {
+    "2": [
+        { clave:"MAT201", nombre:"Cálculo Diferencial" },
+        { clave:"INF202", nombre:"Programación Orientada a Objetos" },
+        { clave:"ADM203", nombre:"Contabilidad Básica" },
+        { clave:"HUM204", nombre:"Desarrollo Humano" },
+        { clave:"ING205", nombre:"Inglés II" },
+        { clave:"FIS206", nombre:"Física Aplicada" },
+    ],
+    "3": [
+        { clave:"MAT301", nombre:"Cálculo Integral" },
+        { clave:"INF302", nombre:"Bases de Datos" },
+        { clave:"ADM303", nombre:"Administración de Proyectos" },
+        { clave:"HUM304", nombre:"Ética Profesional" },
+        { clave:"ING305", nombre:"Inglés III" },
+        { clave:"RED306", nombre:"Redes de Computadoras" },
+    ],
+    "4": [
+        { clave:"MAT401", nombre:"Álgebra Lineal" },
+        { clave:"INF402", nombre:"Desarrollo Web" },
+        { clave:"ADM403", nombre:"Gestión de Calidad" },
+        { clave:"ING404", nombre:"Inglés IV" },
+        { clave:"SIS405", nombre:"Sistemas Operativos" },
+        { clave:"SEG406", nombre:"Seguridad Informática" },
+    ],
+    "5": [
+        { clave:"INF501", nombre:"Inteligencia Artificial" },
+        { clave:"INF502", nombre:"Desarrollo Móvil" },
+        { clave:"ADM503", nombre:"Emprendimiento" },
+        { clave:"ING504", nombre:"Inglés V" },
+        { clave:"INF505", nombre:"Arquitectura de Software" },
+        { clave:"MAT506", nombre:"Estadística" },
+    ],
+    "6": [
+        { clave:"INF601", nombre:"Proyecto Integrador" },
+        { clave:"INF602", nombre:"Cloud Computing" },
+        { clave:"ADM603", nombre:"Liderazgo Empresarial" },
+        { clave:"ING604", nombre:"Inglés VI" },
+        { clave:"INF605", nombre:"Seminario de Titulación" },
+        { clave:"INF606", nombre:"Residencia Profesional" },
+    ],
+};
+
+function actualizarMaterias() {
+    const cuatri = document.getElementById('cuatrimestre').value;
+    const grid   = document.getElementById('materias-grid');
+    const cont   = document.getElementById('materias-container');
+    grid.innerHTML = '';
+    document.getElementById('materias-contador').textContent = '0 materias seleccionadas';
+    document.getElementById('materias-hidden').value = '';
+    if (!cuatri) { cont.style.display = 'none'; return; }
+    cont.style.display = 'block';
+    (catalogoMaterias[cuatri] || []).forEach(m => {
+        const card = document.createElement('div');
+        card.className = 'materia-card';
+        card.innerHTML = `
+            <i class="fas fa-circle-check check-icon"></i>
+            <div>
+                <div class="materia-nombre">${m.nombre}</div>
+                <div class="materia-clave">${m.clave}</div>
+            </div>
+            <input type="checkbox" value="${m.clave}|${m.nombre}">
+        `;
+        card.addEventListener('click', () => {
+            const cb = card.querySelector('input[type="checkbox"]');
+            cb.checked = !cb.checked;
+            card.classList.toggle('seleccionada', cb.checked);
+            actualizarContador();
+        });
+        grid.appendChild(card);
+    });
+}
+
+function actualizarContador() {
+    const sel = document.querySelectorAll('.materia-card.seleccionada');
+    const n   = sel.length;
+    document.getElementById('materias-contador').textContent =
+        n + ' materia' + (n !== 1 ? 's' : '') + ' seleccionada' + (n !== 1 ? 's' : '');
+    document.getElementById('materias-hidden').value =
+        JSON.stringify(Array.from(sel).map(c => c.querySelector('input').value));
+}
+
+function irPaso(destino) {
+    if (destino > pasoActual && !validarPaso(pasoActual)) return;
+    const stepActual = document.getElementById('step-ind-' + pasoActual);
+    stepActual.classList.remove('active');
+    document.getElementById('paso-' + pasoActual).classList.remove('active');
+    if (destino > pasoActual) {
+        stepActual.classList.add('done');
+        const l = document.getElementById('line-' + pasoActual);
+        if (l) l.classList.add('done');
+    } else {
+        stepActual.classList.remove('done');
+        stepActual.classList.add('active');
+        const l = document.getElementById('line-' + pasoActual);
+        if (l) l.classList.remove('done');
+    }
+    pasoActual = destino;
+    document.getElementById('paso-' + pasoActual).classList.add('active');
+    const stepNuevo = document.getElementById('step-ind-' + pasoActual);
+    stepNuevo.classList.remove('done');
+    stepNuevo.classList.add('active');
+    if (pasoActual === 4) actualizarResumen();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function validarPaso(paso) {
+    if (paso === 1) {
+        const mat = document.getElementById('matricula').value.trim();
+        const nom = document.getElementById('nombre').value.trim();
+        const cor = document.getElementById('correo').value.trim();
+        const tel = document.getElementById('telefono').value.trim();
+        if (mat.length < 8)    { alert('⚠️ La matrícula debe tener entre 8 y 10 dígitos.'); return false; }
+        if (nom.length < 5)    { alert('⚠️ Ingresa tu nombre completo.'); return false; }
+        if (!cor.includes('@')){ alert('⚠️ Ingresa un correo válido.'); return false; }
+        if (tel.length !== 10) { alert('⚠️ El teléfono debe tener 10 dígitos.'); return false; }
+    }
+    if (paso === 2) {
+        if (!document.getElementById('cuatrimestre').value) { alert('⚠️ Selecciona el cuatrimestre.'); return false; }
+        if (!document.querySelectorAll('.materia-card.seleccionada').length) { alert('⚠️ Selecciona al menos una materia.'); return false; }
+    }
+    if (paso === 3) {
+        if (!document.getElementById('comprobante').files.length)         { alert('⚠️ Sube el comprobante de pago.'); return false; }
+        if (!document.getElementById('fecha_pago').value)                 { alert('⚠️ Ingresa la fecha de pago.'); return false; }
+        if (!document.getElementById('referencia_pago').value.trim())     { alert('⚠️ Ingresa el número de referencia.'); return false; }
+    }
+    return true;
+}
+
+function actualizarResumen() {
+    const v = id => document.getElementById(id).value || '—';
+    const f = id => { const files = document.getElementById(id).files; return files.length ? '✅ ' + files[0].name : '❌ Sin archivo'; };
+    document.getElementById('res-matricula').textContent   = v('matricula');
+    document.getElementById('res-nombre').textContent      = v('nombre');
+    document.getElementById('res-correo').textContent      = v('correo');
+    document.getElementById('res-telefono').textContent    = v('telefono');
+    document.getElementById('res-comprobante').textContent = f('comprobante');
+    document.getElementById('res-fecha-pago').textContent  = v('fecha_pago');
+    document.getElementById('res-referencia').textContent  = v('referencia_pago');
+    const cuatriSel = document.getElementById('cuatrimestre');
+    document.getElementById('res-cuatrimestre').textContent = cuatriSel.options[cuatriSel.selectedIndex]?.text || '—';
+    const sel = document.querySelectorAll('.materia-card.seleccionada');
+    document.getElementById('res-materias').innerHTML = sel.length
+        ? Array.from(sel).map(c => `<span class="tag-materia">${c.querySelector('.materia-nombre').textContent}</span>`).join('')
+        : '—';
+}
+
+function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
+</script>
+</body>
+</html>
