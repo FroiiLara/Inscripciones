@@ -33,10 +33,18 @@
 
             <!-- Usuario -->
             <div class="form-group">
-                <i class="fas fa-user icon"></i>
-                    <input type="text" name="usuario" placeholder="Usuario" 
-                        required minlength="4" 
-                        title="Ingresa tu nombre de usuario">
+                <i class="fas fa-id-badge icon"></i>
+                <input 
+                    type="text" 
+                    name="usuario" 
+                    placeholder="Matrícula" 
+                    required 
+                    minlength="4" 
+                    maxlength="12"
+                    inputmode="numeric"
+                    pattern="[0-9]*" 
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                    title="Ingresa solo los números de tu matrícula">
             </div>
             
 
