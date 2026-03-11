@@ -3,21 +3,22 @@
 
 /* Global Styles */
 body {
-    font-family: 'Poppins', sans-serif; /* Usando Poppins */
-    color: #ffffff; /* Texto global blanco para el fondo oscuro */
+    font-family: 'Poppins', sans-serif;
+    color: #ffffff;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     min-height: 100vh;
     margin: 0;
-    padding: 0 20px;
+    padding: 40px 20px;
     -webkit-font-smoothing: antialiased;
-    background-color: #ff8a00; 
+    background-color: #ff8a00;
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
     position: relative;
-    overflow: hidden;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 
 /* Overlay para oscurecer la imagen y mejorar el contraste del formulario */
@@ -28,21 +29,19 @@ body::before {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.4); /* Capa oscura semitransparente */
+    background-color: rgba(0, 0, 0, 0.4);
     z-index: 1;
 }
 
 /* Login Container */
 .login-container {
-    /* --- CAMBIOS CLAVE: Efecto Glassmorphism --- */
-    background: rgba(255, 255, 255, 0.15); /* Fondo blanco semitransparente */
-    backdrop-filter: blur(8px); /* Efecto de desenfoque */
-    -webkit-backdrop-filter: blur(8px); 
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.2); /* Borde sutil */
-    color: #ffffff; /* Aseguramos que el texto principal en el contenedor sea blanco */
-    z-index: 2; /* Para que esté sobre el overlay */
-    /* --- FIN CAMBIOS CLAVE --- */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    z-index: 2;
 
     padding: 30px 40px;
     border-radius: 15px;
@@ -50,14 +49,14 @@ body::before {
     max-width: 450px;
     box-sizing: border-box;
     position: relative;
-    transform: translateZ(0);
+    margin: auto 0;
 }
 
 /* Centrar imagen del login */
 .login-form img {
     display: block;
-    margin: 0 auto 20px auto; /* Más espacio debajo del logo */
-    max-width: 180px; /* Tamaño máximo para el logo */
+    margin: 0 auto 20px auto;
+    max-width: 180px;
 }
 
 /* Form */
@@ -65,7 +64,7 @@ body::before {
     text-align: center;
     margin-bottom: 25px;
     font-size: 28px;
-    color: #ffffff; /* Blanco para contraste */
+    color: #ffffff;
     font-weight: 600;
 }
 
@@ -82,32 +81,30 @@ body::before {
 
 .form-group .icon {
     position: absolute;
-    left: 15px; /* Más padding para el ícono */
+    left: 15px;
     top: 50%;
     transform: translateY(-50%);
-    color: #333333; /* Color oscuro para el ícono sobre el fondo claro del input */
+    color: #333333;
     font-size: 20px;
     z-index: 3;
 }
 
 .form-group input {
-    /* --- CAMBIOS CLAVE: Fondo claro para Input --- */
     width: 100%;
-    padding: 15px 15px 15px 50px; /* Padding ajustado para el ícono */
-    border: 2px solid rgba(0, 0, 0, 0.15); /* Borde suave */
+    padding: 15px 15px 15px 50px;
+    border: 2px solid rgba(0, 0, 0, 0.15);
     border-radius: 10px;
-    background-color: rgba(255, 255, 255, 0.9); /* Fondo claro casi opaco */
-    color: #333; /* Texto oscuro para el input */
+    background-color: rgba(255, 255, 255, 0.9);
+    color: #333;
     outline: none;
     font-size: 16px;
     transition: all 0.3s ease;
     box-sizing: border-box;
-    /* --- FIN CAMBIOS CLAVE --- */
 }
 
 .form-group input:focus {
     background-color: #ffffff;
-    border-color: rgb(32, 84, 121); /* Tu color de marca en el focus */
+    border-color: rgb(32, 84, 121);
     box-shadow: 0 0 0 3px rgba(32, 84, 121, 0.3);
 }
 
@@ -115,20 +112,20 @@ body::before {
     color: #888;
 }
 
-/* Botón color solicitado */
+/* Botón */
 .btn {
     width: 100%;
     padding: 14px;
     border: none;
     border-radius: 10px;
-    background-color: #ff8a00; /* Color solicitado */
-    color: #fff; /* Texto blanco */
+    background-color: #ff8a00;
+    color: #fff;
     font-size: 18px;
     font-weight: bold;
     text-transform: uppercase;
     cursor: pointer;
     transition: all 0.3s ease, transform 0.2s ease;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); /* Sombra mejorada */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
 .btn:hover {
@@ -149,19 +146,19 @@ body::before {
 
 .signup-link p, .login-link p {
     font-size: 14px;
-    color: #ffffff; /* Blanco para contraste */
+    color: #ffffff;
 }
 
 .signup-text, .login-text {
     color: #ffffff;
     font-weight: bold;
-    text-decoration: underline; /* Subrayado para contraste */
+    text-decoration: underline;
     transition: color 0.3s ease;
 }
 
 .signup-text:hover, .login-text:hover {
-    color: #e0e0e0; /* Gris claro al pasar el mouse */
-    transform: none; /* Quitamos la transformación del hover para enlaces */
+    color: #e0e0e0;
+    transform: none;
 }
 
 /* Ocultar ícono de ojo nativo del navegador (Edge, IE, Chrome) */
@@ -210,9 +207,6 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
     padding-right: 45px !important;
 }
 
-/* Se eliminan los pseudo-elementos ::before y ::after ya que usaremos íconos de Font Awesome */
-
-
 /* Estilo del mensaje de error */
 .error-message {
     font-size: 14px;
@@ -239,10 +233,9 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
     border: 1px solid #28a745;
 }
 
-
 .forgot-password a {
     text-decoration: none;
-    color: #ffffff; /* Blanco para contraste */
+    color: #ffffff;
     font-weight: bold;
     transition: color 0.3s;
 }
