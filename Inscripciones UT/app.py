@@ -49,11 +49,11 @@ MONGO_URI = os.environ.get("MONGO_URI")
 client    = MongoClient(MONGO_URI)
 db        = client["Users"]
 collection        = db["Users"]
-inscripciones_col = db["Inscripciones"]   # ← Nueva colección
+inscripciones_col = db["Inscripciones"]   
 
 # ================= UPLOADS =================
 UPLOAD_FOLDER     = os.path.join('static', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)   # Se crea automáticamente si no existe
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)   
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
 
 def allowed_file(filename):
@@ -118,27 +118,55 @@ def home():
 @app.route('/registro', methods=['GET', 'POST'])
 def registro():
     if request.method == 'POST':
-        usuario   = str(request.form.get('usuario', '')).strip()
-        email     = str(request.form.get('email', '')).lower().strip()
-        contrasena= str(request.form.get('contrasena', ''))
 
-        if not usuario or not email or not contrasena:
+        matricula   = str(request.form.get('matricula', '')).strip()
+        usuario     = str(request.form.get('usuario', '')).strip()
+        email       = str(request.form.get('email', '')).lower().strip()
+        contrasena  = str(request.form.get('contrasena', ''))
+
+        if not matricula or not usuario or not email or not contrasena:
             abort(400)
 
-        if not validar_no_sql_injection(usuario) or not validar_no_sql_injection(email):
-            flash("Caracteres no permitidos detectados.", "error")
+        # validar matrícula solo números
+        if not matricula.isdigit():
+            flash("La matrícula debe contener solo números.", "error")
             return redirect(url_for('registro'))
 
+        # validar nombre
+        if not validar_no_sql_injection(usuario):
+            flash("Nombre inválido.", "error")
+            return redirect(url_for('registro'))
+
+        # validar dominio
         if not email.endswith("@virtual.utsc.edu.mx"):
             flash("Debe usar un correo institucional @virtual.utsc.edu.mx", "error")
             return redirect(url_for('registro'))
 
+        # validar contraseña segura
+        password_regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$'
+
+        if not re.fullmatch(password_regex, contrasena):
+            flash("La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y símbolo.", "error")
+            return redirect(url_for('registro'))
+
+        # verificar si ya existe matrícula
+        if collection.find_one({'matricula': matricula}):
+            flash("La matrícula ya está registrada.", "error")
+            return redirect(url_for('registro'))
+
+        # verificar email
         if collection.find_one({'email': email}):
             flash("El correo ya está registrado.", "error")
             return redirect(url_for('registro'))
 
         hashed = bcrypt.generate_password_hash(contrasena).decode('utf-8')
-        collection.insert_one({'usuario': usuario, 'email': email, 'contrasena': hashed})
+
+        collection.insert_one({
+            'matricula': matricula,
+            'usuario': usuario,
+            'email': email,
+            'contrasena': hashed
+        })
 
         flash("Registro exitoso. Inicia sesión.", "success")
         return redirect(url_for('login'))
@@ -149,21 +177,25 @@ def registro():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        usuario   = str(request.form.get('usuario', '')).strip()
-        contrasena= str(request.form.get('contrasena', ''))
 
-        if not usuario or not contrasena:
+        matricula   = str(request.form.get('matricula', '')).strip()
+        contrasena  = str(request.form.get('contrasena', ''))
+
+        if not matricula or not contrasena:
             abort(400)
 
-        user = collection.find_one({'usuario': {"$eq": usuario}})
+        user = collection.find_one({'matricula': {"$eq": matricula}})
 
         if user and bcrypt.check_password_hash(user['contrasena'], contrasena):
-            access_token = create_access_token(identity=usuario)
-            response     = redirect(url_for('pagina_principal'))
+
+            access_token = create_access_token(identity=matricula)
+
+            response = redirect(url_for('pagina_principal'))
             set_access_cookies(response, access_token)
+
             return response
 
-        flash("Usuario o contraseña incorrectos.", "error")
+        flash("Matrícula o contraseña incorrectos.", "error")
         return render_template('login.html'), 401
 
     return render_template('login.html')
@@ -183,18 +215,33 @@ def logout():
 @app.route('/pagina_principal')
 @jwt_required()
 def pagina_principal():
-    usuario = get_jwt_identity()
-    return render_template('index.html', usuario=usuario)
+    matricula = get_jwt_identity()
+    user = collection.find_one({"matricula": matricula})
+    if not user:
+        return redirect(url_for("login"))
+    return render_template(
+        "index.html",
+        usuario=user["usuario"]  
+    )
 
 
 @app.route('/mi_perfil')
 @jwt_required()
 def mi_perfil():
-    usuario   = get_jwt_identity()
-    user_data = collection.find_one({'usuario': usuario})
+
+    matricula = get_jwt_identity()
+
+    user_data = collection.find_one({'matricula': matricula})
+
     if not user_data:
         abort(404)
-    return render_template('mi_perfil.html', usuario=usuario, email=user_data['email'])
+
+    return render_template(
+        'mi_perfil.html',
+        usuario=user_data['usuario'],
+        email=user_data['email'],
+        matricula=user_data['matricula']
+    )
 
 
 @app.route('/inscripcion')
