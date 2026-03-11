@@ -149,13 +149,13 @@
                     <label>Carrera a Ingresar <span style="color:red">*</span></label>
                     <select name="carrera" id="carrera">
                         <option value="">-- Selecciona una carrera --</option>
-                        <option value="TSU en Tecnologías de la Información">TSU en Tecnologías de la Información</option>
-                        <option value="TSU en Mecatrónica">TSU en Mecatrónica</option>
-                        <option value="TSU en Administración">TSU en Administración</option>
-                        <option value="TSU en Nanotecnología">TSU en Nanotecnología</option>
-                        <option value="TSU en Procesos Industriales">TSU en Procesos Industriales</option>
-                        <option value="Ingeniería en Tecnologías de la Información">Ingeniería en Tecnologías de la Información</option>
-                        <option value="Ingeniería en Mecatrónica">Ingeniería en Mecatrónica</option>
+                        <option value="ITID">Ing. en Tecnologías de la Información e Innovación Digital</option>
+                        <option value="II">Ingeniería Industrial</option>
+                        <option value="IMI">Ing. en Mantenimiento Industrial</option>
+                        <option value="IMT">Ingeniería Mecatrónica</option>
+                        <option value="IE">Ingeniería en Electromovilidad</option>
+                        <option value="LNM">Lic. en Negocios y Mercadotecnia</option>
+                        <option value="LLI">Lic. en Educación (Enseñanza del Idioma Inglés)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -192,7 +192,7 @@
                 </div>
                 <div class="btn-nav">
                     <button type="button" class="btn-prev" onclick="irPaso(2)"><i class="fas fa-arrow-left"></i> Anterior</button>
-                    <button type="button" class="btn-next" onclick="irPaso(4)">Revisar <i class="fas fa-eye"></i></button>
+                    <button type="button" class="btn-next" onclick="irPaso(4)">Revisar <i class="fas fa-arrow-right"></i></button>
                 </div>
             </div>
 
@@ -236,7 +236,7 @@
         <div class="footer-section">
             <h4>Contacto</h4>
             <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
-            <p><i class="fas fa-envelope"></i> soporte@utsc.edu.mx</p>
+            <p><i class="fas fa-envelope"></i> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="483b2738273a3c2d083d3c3b2b662d2c3d662530">[email&#160;protected]</a></p>
         </div>
         <div class="footer-section">
             <h4>Gobierno de Nuevo León</h4>
@@ -246,7 +246,7 @@
     </div>
 </footer>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 let pasoActual = 1;
 document.getElementById('fecha_nacimiento').max = new Date().toISOString().split('T')[0];
 
@@ -276,34 +276,35 @@ function irPaso(destino) {
 
 function validarPaso(paso) {
     if (paso === 1) {
-        if (document.getElementById('nombre').value.trim().length < 10)  { alert('⚠️ Ingresa tu nombre completo (mínimo 10 caracteres).'); return false; }
-        if (document.getElementById('curp').value.trim().length !== 18)  { alert('⚠️ La CURP debe tener exactamente 18 caracteres.'); return false; }
-        if (!document.getElementById('fecha_nacimiento').value)          { alert('⚠️ Ingresa tu fecha de nacimiento.'); return false; }
-        if (document.getElementById('telefono').value.trim().length !== 10) { alert('⚠️ El teléfono debe tener 10 dígitos.'); return false; }
-        if (!document.getElementById('fotografia').files.length)         { alert('⚠️ Sube tu fotografía.'); return false; }
+        if (document.getElementById('nombre').value.trim().length < 10)  { alert('Ingresa tu nombre completo (mínimo 10 caracteres).'); return false; }
+        if (document.getElementById('curp').value.trim().length !== 18)  { alert('La CURP debe tener exactamente 18 caracteres.'); return false; }
+        if (!document.getElementById('fecha_nacimiento').value)          { alert('Ingresa tu fecha de nacimiento.'); return false; }
+        if (document.getElementById('telefono').value.trim().length !== 10) { alert('El teléfono debe tener 10 dígitos.'); return false; }
+        if (!document.getElementById('fotografia').files.length)         { alert('Sube tu fotografía.'); return false; }
     }
     if (paso === 2) {
-        if (!document.getElementById('carrera').value)                   { alert('⚠️ Selecciona una carrera.'); return false; }
-        if (!document.getElementById('contacto_nombre').value.trim())    { alert('⚠️ Ingresa el nombre del contacto de emergencia.'); return false; }
-        if (document.getElementById('contacto_tel').value.trim().length !== 10) { alert('⚠️ El teléfono de emergencia debe tener 10 dígitos.'); return false; }
+        if (!document.getElementById('carrera').value)                   { alert('Selecciona una carrera.'); return false; }
+        if (!document.getElementById('contacto_nombre').value.trim())    { alert('Ingresa el nombre del contacto de emergencia.'); return false; }
+        if (document.getElementById('contacto_tel').value.trim().length !== 10) { alert('El teléfono de emergencia debe tener 10 dígitos.'); return false; }
     }
     if (paso === 3) {
-        if (!document.getElementById('doc_acta').files.length)    { alert('⚠️ Sube el Acta de Nacimiento.'); return false; }
-        if (!document.getElementById('doc_cert').files.length)    { alert('⚠️ Sube el Certificado de Bachillerato.'); return false; }
-        if (!document.getElementById('comprobante').files.length) { alert('⚠️ Sube el Comprobante de Pago.'); return false; }
+        if (!document.getElementById('doc_acta').files.length)    { alert('Sube el Acta de Nacimiento.'); return false; }
+        if (!document.getElementById('doc_cert').files.length)    { alert('Sube el Certificado de Bachillerato.'); return false; }
+        if (!document.getElementById('comprobante').files.length) { alert('Sube el Comprobante de Pago.'); return false; }
     }
     return true;
 }
 
 function actualizarResumen() {
     const v = id => document.getElementById(id).value || '—';
-    const f = id => { const files = document.getElementById(id).files; return files.length ? '✅ ' + files[0].name : '❌ Sin archivo'; };
+    const f = id => { const files = document.getElementById(id).files; return files.length ? files[0].name : 'Sin archivo'; };
     document.getElementById('res-nombre').textContent          = v('nombre');
     document.getElementById('res-curp').textContent            = v('curp');
     document.getElementById('res-fecha').textContent           = v('fecha_nacimiento');
     document.getElementById('res-telefono').textContent        = v('telefono');
     document.getElementById('res-foto').textContent            = f('fotografia');
-    document.getElementById('res-carrera').textContent         = v('carrera');
+    const carreraEl = document.getElementById('carrera');
+    document.getElementById('res-carrera').textContent = carreraEl.options[carreraEl.selectedIndex]?.text || '—';
     document.getElementById('res-contacto-nombre').textContent = v('contacto_nombre');
     document.getElementById('res-contacto-tel').textContent    = v('contacto_tel');
     document.getElementById('res-acta').textContent            = f('doc_acta');

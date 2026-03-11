@@ -116,15 +116,18 @@ label {
 input[type="text"],
 input[type="file"],
 input[type="email"],
+input[type="tel"],
 select {
     width: 100%;
     padding: 12px;
     border-radius: 6px;
     border: 1px solid #ccc;
     font-size: 15px;
+    font-family: 'Poppins', sans-serif;
+    box-sizing: border-box;
 }
 
-input:focus {
+input:focus, select:focus {
     outline: none;
     border-color: var(--nl-orange);
     box-shadow: 0 0 0 2px rgba(255,138,0,0.2);

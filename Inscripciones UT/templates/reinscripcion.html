@@ -158,19 +158,28 @@
                 </div>
             </div>
 
-            <!-- PASO 2: Cuatrimestre y Materias -->
+            <!-- PASO 2: Carrera, Cuatrimestre y Materias -->
             <div class="form-step" id="paso-2">
-                <p class="step-title"><i class="fas fa-book"></i> Cuatrimestre y Materias</p>
+                <p class="step-title"><i class="fas fa-graduation-cap"></i> Carrera y Materias</p>
 
                 <div class="form-group">
+                    <label>Carrera <span style="color:red">*</span></label>
+                    <select name="carrera_clave" id="carrera-sel" onchange="onCarreraChange()">
+                        <option value="">-- Selecciona tu carrera --</option>
+                        <option value="ITID">Ing. en Tecnologías de la Información e Innovación Digital</option>
+                        <option value="II">Ingeniería Industrial</option>
+                        <option value="IMI">Ing. en Mantenimiento Industrial</option>
+                        <option value="IMT">Ingeniería Mecatrónica</option>
+                        <option value="IE">Ingeniería en Electromovilidad</option>
+                        <option value="LNM">Lic. en Negocios y Mercadotecnia</option>
+                        <option value="LLI">Lic. en Educación (Enseñanza del Idioma Inglés)</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="cuatri-group" style="display:none;">
                     <label>Cuatrimestre a Cursar <span style="color:red">*</span></label>
-                    <select name="cuatrimestre" id="cuatrimestre" onchange="actualizarMaterias()">
+                    <select name="cuatrimestre" id="cuatrimestre" onchange="onCuatriChange()">
                         <option value="">-- Selecciona el cuatrimestre --</option>
-                        <option value="2">2° Cuatrimestre</option>
-                        <option value="3">3° Cuatrimestre</option>
-                        <option value="4">4° Cuatrimestre</option>
-                        <option value="5">5° Cuatrimestre</option>
-                        <option value="6">6° Cuatrimestre</option>
                     </select>
                 </div>
 
@@ -180,6 +189,17 @@
                     </label>
                     <div class="materias-grid" id="materias-grid"></div>
                     <span class="materias-contador" id="materias-contador">0 materias seleccionadas</span>
+                </div>
+
+                <!-- Tarjeta especial para Estadía -->
+                <div id="estadia-section" style="display:none;">
+                    <div style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border:2px solid var(--nl-green);border-radius:12px;padding:25px;text-align:center;margin:15px 0;">
+                        <span style="display:inline-block;background:var(--nl-orange);color:#fff;font-size:.75rem;font-weight:700;padding:3px 12px;border-radius:20px;margin-bottom:10px;letter-spacing:1px;">ESTADÍA</span>
+                        <i class="fas fa-briefcase" style="font-size:2.5rem;color:var(--nl-green);display:block;margin:10px 0;"></i>
+                        <h3 id="estadia-titulo" style="color:var(--nl-green);margin:0 0 8px;"></h3>
+                        <p style="color:#555;font-size:.9rem;margin:0;">Este cuatrimestre corresponde a una <strong>estadía</strong> (práctica profesional en empresa).<br>No se requiere selección de materias.</p>
+                    </div>
+                    <input type="hidden" name="es_estadia" id="es-estadia" value="0">
                 </div>
 
                 <input type="hidden" name="materias" id="materias-hidden">
@@ -225,7 +245,7 @@
                         <i class="fas fa-arrow-left"></i> Anterior
                     </button>
                     <button type="button" class="btn-next" onclick="irPaso(4)">
-                        Revisar <i class="fas fa-eye"></i>
+                        Revisar <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
             </div>
@@ -246,10 +266,20 @@
                 </div>
 
                 <div class="resumen-bloque">
-                    <h4><i class="fas fa-book"></i> Cuatrimestre y Materias</h4>
+                    <h4><i class="fas fa-graduation-cap"></i> Carrera, Cuatrimestre y Materias</h4>
+                    <p><strong>Carrera:</strong> <span id="res-carrera">—</span></p>
                     <p><strong>Cuatrimestre:</strong> <span id="res-cuatrimestre">—</span></p>
-                    <p><strong>Materias:</strong></p>
-                    <div id="res-materias" style="margin-top:6px;">—</div>
+                    <div id="res-materias-wrap">
+                        <p><strong>Materias:</strong></p>
+                        <div id="res-materias" style="margin-top:6px;">—</div>
+                    </div>
+                    <div id="res-estadia-wrap" style="display:none;">
+                        <p><strong>Tipo:</strong>
+                            <span style="display:inline-block;background:var(--nl-orange);color:#fff;font-size:.78rem;padding:4px 14px;border-radius:20px;font-weight:600;">
+                                <i class="fas fa-briefcase"></i> ESTADÍA
+                            </span>
+                        </p>
+                    </div>
                 </div>
 
                 <div class="resumen-bloque">
@@ -279,7 +309,7 @@
         <div class="footer-section">
             <h4>Contacto</h4>
             <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
-            <p><i class="fas fa-envelope"></i> soporte@utsc.edu.mx</p>
+            <p><i class="fas fa-envelope"></i> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="61120e110e13150421141512024f0405144f0c19">[email&#160;protected]</a></p>
         </div>
         <div class="footer-section">
             <h4>Enlaces Rápidos</h4><br>
@@ -294,87 +324,187 @@
     </div>
 </footer>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 let pasoActual = 1;
 document.getElementById('fecha_pago').max = new Date().toISOString().split('T')[0];
 
-// ===== CATÁLOGO DE MATERIAS =====
-const catalogoMaterias = {
-    "2": [
-        { clave:"MAT201", nombre:"Cálculo Diferencial" },
-        { clave:"INF202", nombre:"Programación Orientada a Objetos" },
-        { clave:"ADM203", nombre:"Contabilidad Básica" },
-        { clave:"HUM204", nombre:"Desarrollo Humano" },
-        { clave:"ING205", nombre:"Inglés II" },
-        { clave:"FIS206", nombre:"Física Aplicada" },
-    ],
-    "3": [
-        { clave:"MAT301", nombre:"Cálculo Integral" },
-        { clave:"INF302", nombre:"Bases de Datos" },
-        { clave:"ADM303", nombre:"Administración de Proyectos" },
-        { clave:"HUM304", nombre:"Ética Profesional" },
-        { clave:"ING305", nombre:"Inglés III" },
-        { clave:"RED306", nombre:"Redes de Computadoras" },
-    ],
-    "4": [
-        { clave:"MAT401", nombre:"Álgebra Lineal" },
-        { clave:"INF402", nombre:"Desarrollo Web" },
-        { clave:"ADM403", nombre:"Gestión de Calidad" },
-        { clave:"ING404", nombre:"Inglés IV" },
-        { clave:"SIS405", nombre:"Sistemas Operativos" },
-        { clave:"SEG406", nombre:"Seguridad Informática" },
-    ],
-    "5": [
-        { clave:"INF501", nombre:"Inteligencia Artificial" },
-        { clave:"INF502", nombre:"Desarrollo Móvil" },
-        { clave:"ADM503", nombre:"Emprendimiento" },
-        { clave:"ING504", nombre:"Inglés V" },
-        { clave:"INF505", nombre:"Arquitectura de Software" },
-        { clave:"MAT506", nombre:"Estadística" },
-    ],
-    "6": [
-        { clave:"INF601", nombre:"Proyecto Integrador" },
-        { clave:"INF602", nombre:"Cloud Computing" },
-        { clave:"ADM603", nombre:"Liderazgo Empresarial" },
-        { clave:"ING604", nombre:"Inglés VI" },
-        { clave:"INF605", nombre:"Seminario de Titulación" },
-        { clave:"INF606", nombre:"Residencia Profesional" },
-    ],
+// ===== NOMBRES DE CARRERAS =====
+const CN = {
+    "ITID":"Ing. en Tecnologías de la Información e Innovación Digital",
+    "II":"Ingeniería Industrial",
+    "IMI":"Ing. en Mantenimiento Industrial",
+    "IMT":"Ingeniería Mecatrónica",
+    "IE":"Ingeniería en Electromovilidad",
+    "LNM":"Lic. en Negocios y Mercadotecnia",
+    "LLI":"Lic. en Educación (Enseñanza del Idioma Inglés)"
 };
 
-function actualizarMaterias() {
-    const cuatri = document.getElementById('cuatrimestre').value;
-    const grid   = document.getElementById('materias-grid');
-    const cont   = document.getElementById('materias-container');
-    grid.innerHTML = '';
-    document.getElementById('materias-contador').textContent = '0 materias seleccionadas';
+// ===== ETIQUETAS DE CUATRIMESTRES =====
+const CL = {
+    "1":"1° Cuatrimestre — TSU","2":"2° Cuatrimestre — TSU","3":"3° Cuatrimestre — TSU",
+    "4":"4° Cuatrimestre — TSU","5":"5° Cuatrimestre — TSU",
+    "6":"6° Cuatrimestre — Estadía TSU",
+    "7":"7° Cuatrimestre — Ingeniería","8":"8° Cuatrimestre — Ingeniería","9":"9° Cuatrimestre — Ingeniería",
+    "10":"10° Cuatrimestre — Estadía Ingeniería"
+};
+
+// ===== PLAN DE ESTUDIOS OFICIAL =====
+const P = {
+    "ITID":{
+        "1":[{c:"B-ING1-1",n:"Inglés I"},{c:"T-DHU-1",n:"Desarrollo Humano y Valores"},{c:"B-FMA-1",n:"Fundamentos Matemáticos"},{c:"E-FDR-1",n:"Fundamentos de Redes"},{c:"B-FIS-1",n:"Física"},{c:"E-FDP-1",n:"Fundamentos de Programación"},{c:"E-CYHD-1",n:"Comunicación y Habilidades Digitales"}],
+        "2":[{c:"B-ING2-1",n:"Inglés II"},{c:"T-HSMC-1",n:"Habilidades Socioemocionales y Manejo de Conflictos"},{c:"B-CDI-1",n:"Cálculo Diferencial"},{c:"E-CTER-1",n:"Conmutación y Enrutamiento de Redes"},{c:"B-PES-F-1",n:"Probabilidad y Estadística"},{c:"E-PRE-1",n:"Programación Estructurada"},{c:"E-SIOP-1",n:"Sistemas Operativos"}],
+        "3":[{c:"B-ING3-1",n:"Inglés III"},{c:"T-DPTD-1",n:"Desarrollo del Pensamiento y Toma de Decisiones"},{c:"B-CIN-1",n:"Cálculo Integral"},{c:"E-TCDS-1",n:"Tópicos de Calidad para el Diseño de Software"},{c:"E-BDD-1",n:"Bases de Datos"},{c:"E-POAO-1",n:"Programación Orientada a Objetos"},{c:"E-PIN1-1",n:"Proyecto Integrador I"}],
+        "4":[{c:"B-ING4-2",n:"Inglés IV"},{c:"T-EPR-2",n:"Ética Profesional"},{c:"B-CVV-2",n:"Cálculo de Varias Variables"},{c:"E-APWB-2",n:"Aplicaciones Web"},{c:"E-ETD-2",n:"Estructura de Datos"},{c:"E-DAPM-2",n:"Desarrollo de Aplicaciones Móviles"},{c:"E-AYDS-2",n:"Análisis y Diseño de Software"}],
+        "5":[{c:"B-ING5-2",n:"Inglés V"},{c:"T-LEAD-2",n:"Liderazgo de Equipos de Alto Desempeño"},{c:"B-EDI-2",n:"Ecuaciones Diferenciales"},{c:"E-AWOS-2",n:"Aplicaciones Web Orientadas a Servicios"},{c:"E-BDAV-2",n:"Bases de Datos Avanzadas"},{c:"E-EMDS-2",n:"Estándares y Métricas para el Desarrollo de Software"},{c:"E-PIN2-2",n:"Proyecto Integrador II"}],
+        "6":{e:true,n:"Estadía TSU en Desarrollo de Software Multiplataforma"},
+        "7":[{c:"B-ING6-3",n:"Inglés VI"},{c:"T-HGE-3",n:"Habilidades Gerenciales"},{c:"E-FPT-3",n:"Formulación de Proyectos de Tecnología"},{c:"E-FIA-3",n:"Fundamentos de Inteligencia Artificial"},{c:"E-ELTI-3",n:"Ética y Legislación en TI"},{c:"O-BDEN-3",n:"Seguridad Informática"},{c:"E-SEIN-3",n:"Seguridad Informática Avanzada"}],
+        "8":[{c:"B-ING7-3",n:"Inglés VII"},{c:"E-ELDG-3",n:"Electrónica Digital"},{c:"E-GPT-3",n:"Gestión de Proyectos de Tecnología"},{c:"E-PPIA-3",n:"Programación para Inteligencia Artificial"},{c:"E-ADS-3",n:"Administración de Servidores"},{c:"O-PMOA-3",n:"Informática Forense"}],
+        "9":[{c:"B-ING8-3",n:"Inglés VIII"},{c:"E-IDC-3",n:"Internet de las Cosas"},{c:"E-EPT-3",n:"Evaluación de Proyectos de Tecnología"},{c:"E-CIDA-3",n:"Ciencia de Datos"},{c:"E-TECD-3",n:"Tecnologías Disruptivas"},{c:"O-FWDM-3",n:"Frameworks para Desarrollo Multiplataforma"},{c:"E-PIN3-3",n:"Proyecto Integrador III"}],
+        "10":{e:true,n:"Estadía — Lic. en Ing. en Tecnologías de la Información e Innovación Digital"}
+    },
+    "II":{
+        "1":[{c:"B-ING1-1",n:"Inglés I"},{c:"T-DHU-1",n:"Desarrollo Humano y Valores"},{c:"B-FMA-1",n:"Fundamentos Matemáticos"},{c:"E-DIIN-1",n:"Dibujo Industrial"},{c:"B-QBA-F",n:"Química Básica"},{c:"E-MET-1",n:"Metrología"},{c:"B-CHD-1",n:"Comunicación y Habilidades Digitales"}],
+        "2":[{c:"B-ING2-1",n:"Inglés II"},{c:"T-HSMC-1",n:"Habilidades Socioemocionales y Manejo de Conflictos"},{c:"B-CDI-1",n:"Cálculo Diferencial"},{c:"B-FIS-1",n:"Física"},{c:"B-PES-F",n:"Probabilidad y Estadística"},{c:"E-SHM-1",n:"Seguridad, Higiene y Medio Ambiente"},{c:"E-COP-1",n:"Costos de Producción"}],
+        "3":[{c:"B-ING3-1",n:"Inglés III"},{c:"T-DPTD-1",n:"Desarrollo del Pensamiento y Toma de Decisiones"},{c:"B-CIN-1",n:"Cálculo Integral"},{c:"E-CCA-1",n:"Control de Calidad"},{c:"E-PFA-1",n:"Procesos de Fabricación"},{c:"E-EST-1",n:"Estudio del Trabajo"},{c:"E-PIN1-1",n:"Proyecto Integrador I"}],
+        "4":[{c:"B-ING4-2",n:"Inglés IV"},{c:"T-EPR-2",n:"Ética Profesional"},{c:"B-CVV-2",n:"Cálculo de Varias Variables"},{c:"E-IPET-2",n:"Ingeniería de Planta y Estudio del Trabajo"},{c:"E-ACC-2",n:"Administración y Control de la Calidad"},{c:"E-TTM-2",n:"Tecnologías de Transformación de Materiales"},{c:"E-INEC-2",n:"Ingeniería Económica"}],
+        "5":[{c:"B-ING5-2",n:"Inglés V"},{c:"T-LEAD-2",n:"Liderazgo de Equipos de Alto Desempeño"},{c:"B-EDI-2",n:"Ecuaciones Diferenciales"},{c:"E-ACO-2",n:"Administración y Control de Operaciones"},{c:"E-GAPI-2",n:"Gestión Ambiental en Procesos Industriales"},{c:"E-SMA-2",n:"Sistemas de Manufactura Aplicada"},{c:"E-PIN2-2",n:"Proyecto Integrador II"}],
+        "6":{e:true,n:"Estadía TSU en Procesos Productivos"},
+        "7":[{c:"B-ING6-3",n:"Inglés VI"},{c:"T-HGE-3",n:"Habilidades Gerenciales"},{c:"E-INP-3",n:"Ingeniería de Planta"},{c:"E-IOP1-3",n:"Investigación de Operaciones I"},{c:"E-MES-3",n:"Manufactura Esbelta"},{c:"E-ACP-3",n:"Automatización y Control de Procesos"},{c:"E-TNTM-3",n:"Tópicos de Nuevas Tecnologías de Manufactura"}],
+        "8":[{c:"B-ING7-3",n:"Inglés VII"},{c:"E-SGC-3",n:"Sistemas de Gestión de la Calidad"},{c:"E-LOG-3",n:"Logística"},{c:"E-IOP2-3",n:"Investigación de Operaciones II"},{c:"E-SIG-3",n:"6 Sigma"},{c:"E-DIP-3",n:"Diseño del Producto"},{c:"E-EAP-3",n:"Evaluación y Administración de Proyectos"}],
+        "9":[{c:"B-ING8-3",n:"Inglés VIII"},{c:"E-LEIN-3",n:"Legislación Industrial"},{c:"E-AIS-3",n:"Administración Industrial y de Servicios"},{c:"E-SIP-3",n:"Simulación de Procesos"},{c:"E-AMA-3",n:"Administración del Mantenimiento"},{c:"E-MIC-3",n:"Manufactura Integrada por Computadora"},{c:"E-PIN3-3",n:"Proyecto Integrador III"}],
+        "10":{e:true,n:"Estadía — Licenciatura en Ingeniería Industrial"}
+    },
+    "IMI":{
+        "1":[{c:"B-ING1-1",n:"Inglés I"},{c:"T-DHU-1",n:"Desarrollo Humano y Valores"},{c:"B-FMA-1",n:"Fundamentos Matemáticos"},{c:"E-FMA-1",n:"Fundamentos de Mantenimiento"},{c:"E-DIN-1",n:"Dibujo Industrial"},{c:"E-SIN-1",n:"Seguridad Industrial"},{c:"E-CHD-1",n:"Comunicación y Habilidades Digitales"}],
+        "2":[{c:"B-ING2-1",n:"Inglés II"},{c:"T-HSMC-1",n:"Habilidades Socioemocionales y Manejo de Conflictos"},{c:"B-CDI-1",n:"Cálculo Diferencial"},{c:"B-FIS-1",n:"Física"},{c:"B-PES-F",n:"Probabilidad y Estadística"},{c:"E-GMA-1",n:"Gestión del Mantenimiento"},{c:"B-TER-F",n:"Termodinámica"}],
+        "3":[{c:"B-ING3-1",n:"Inglés III"},{c:"T-DPTD-1",n:"Desarrollo del Pensamiento y Toma de Decisiones"},{c:"B-CIN-1",n:"Cálculo Integral"},{c:"E-SEL-1",n:"Sistemas Eléctricos"},{c:"E-MME-1",n:"Máquinas y Mecanismos"},{c:"E-EAN-1",n:"Electrónica Analógica"},{c:"E-PIN1-1",n:"Proyecto Integrador I"}],
+        "4":[{c:"B-ING4-2",n:"Inglés IV"},{c:"T-EPR-2",n:"Ética Profesional"},{c:"B-CVV-2",n:"Cálculo de Varias Variables"},{c:"E-MEL-2",n:"Máquinas Eléctricas"},{c:"E-MPM-2",n:"Mantenimiento a Procesos de Manufactura"},{c:"E-EDI-2",n:"Electrónica Digital"},{c:"E-SNH-2",n:"Sistemas Neumáticos e Hidráulicos"}],
+        "5":[{c:"B-ING5-2",n:"Inglés V"},{c:"T-LEAD-2",n:"Liderazgo de Equipos de Alto Desempeño"},{c:"B-EDI-2",n:"Ecuaciones Diferenciales"},{c:"E-ARO-2",n:"Automatización y Robótica"},{c:"E-STI-2",n:"Sistemas Térmicos e Industriales"},{c:"E-CMA-2",n:"Ciencia de los Materiales"},{c:"E-PIN2-2",n:"Proyecto Integrador II"}],
+        "6":{e:true,n:"Estadía TSU en Mantenimiento Industrial"},
+        "7":[{c:"B-ING6-3",n:"Inglés VI"},{c:"T-HGE-3",n:"Habilidades Gerenciales"},{c:"E-FIN-F",n:"Física para Ingeniería"},{c:"E-AEM-3",n:"Administración Estratégica para Mantenimiento"},{c:"E-TRB-3",n:"Tribología"},{c:"E-INE-3",n:"Instalaciones Eléctricas"},{c:"E-MST-3",n:"Métodos y Sistemas de Trabajo"}],
+        "8":[{c:"B-ING7-3",n:"Inglés VII"},{c:"E-IEC-3",n:"Ingeniería Económica"},{c:"E-MPD-3",n:"Mantenimiento Predictivo Mecánico"},{c:"E-TTR-3",n:"Técnicas TPM y RCM"},{c:"E-END-3",n:"Ensayos Destructivos"},{c:"E-SARI-3",n:"Sistemas Automatizados y Redes Industriales"},{c:"E-POM-3",n:"Protocolos de Operación y Mantenimiento"}],
+        "9":[{c:"B-ING8-3",n:"Inglés VIII"},{c:"E-GAM-3",n:"Gestión Ambiental"},{c:"E-MAC-3",n:"Manufactura Asistida por Computadora"},{c:"E-GTH-3",n:"Gestión del Talento Humano"},{c:"E-END-3b",n:"Ensayos No Destructivos"},{c:"E-VCP-3",n:"Visualización y Control de Procesos"},{c:"E-PIN3-3",n:"Proyecto Integrador III"}],
+        "10":{e:true,n:"Estadía — Licenciatura en Ing. en Mantenimiento Industrial"}
+    },
+    "IMT":{
+        "1":[{c:"B-ING1-1",n:"Inglés I"},{c:"T-DHU-1",n:"Desarrollo Humano y Valores"},{c:"B-FMA-1",n:"Fundamentos Matemáticos"},{c:"E-PI-1",n:"Procesos Industriales"},{c:"E-MP-1",n:"Metodología de la Programación"},{c:"E-MET-1",n:"Metrología"},{c:"E-CHD-1",n:"Comunicación y Habilidades Digitales"}],
+        "2":[{c:"B-ING2-1",n:"Inglés II"},{c:"T-HSMC-1",n:"Habilidades Socioemocionales y Manejo de Conflictos"},{c:"B-CDI-1",n:"Cálculo Diferencial"},{c:"B-FIS-1",n:"Física"},{c:"B-PES-F",n:"Probabilidad y Estadística"},{c:"E-CE-1",n:"Circuitos Eléctricos"},{c:"E-DI-1",n:"Dibujo para Ingeniería"}],
+        "3":[{c:"B-ING3-1",n:"Inglés III"},{c:"T-DPTD-1",n:"Desarrollo del Pensamiento y Toma de Decisiones"},{c:"B-CIN-1",n:"Cálculo Integral"},{c:"E-EM-1",n:"Elementos Mecánicos"},{c:"E-ED-1",n:"Electrónica Digital"},{c:"E-EADP-1",n:"Electrónica Analógica y de Potencia"},{c:"E-PINI-1",n:"Proyecto Integrador I"}],
+        "4":[{c:"B-ING4-2",n:"Inglés IV"},{c:"T-EPR-2",n:"Ética Profesional"},{c:"B-CVV-2",n:"Cálculo de Varias Variables"},{c:"B-EPM-F",n:"Estructura y Propiedades de los Materiales"},{c:"E-CME-2",n:"Control de Motores Eléctricos"},{c:"E-SNH-2",n:"Sistemas Neumáticos e Hidráulicos"},{c:"E-ININ-2",n:"Instrumentación Industrial"}],
+        "5":[{c:"B-ING5-2",n:"Inglés V"},{c:"T-LEAD-2",n:"Liderazgo de Equipos de Alto Desempeño"},{c:"B-EDI-2",n:"Ecuaciones Diferenciales"},{c:"E-CLP-2",n:"Controladores Lógicos Programables"},{c:"E-PM-2",n:"Procesos de Manufactura"},{c:"E-IMSA-2",n:"Implementación de Sistemas Automáticos"},{c:"E-PIN2-2",n:"Proyecto Integrador II"}],
+        "6":{e:true,n:"Estadía TSU en Automatización"},
+        "7":[{c:"B-ING6-3",n:"Inglés VI"},{c:"T-HGE-3",n:"Habilidades Gerenciales"},{c:"E-MSS-3",n:"Modelado y Simulación de Sistemas"},{c:"E-CDR-3",n:"Cinemática y Dinámica de Robots"},{c:"E-AM-3",n:"Análisis de Mecanismos"},{c:"E-IV-3",n:"Instrumentación Virtual"},{c:"E-SE-3",n:"Sistemas Embebidos"}],
+        "8":[{c:"B-ING7-3",n:"Inglés VII"},{c:"E-DAPC-3",n:"Diseño Asistido por Computadora"},{c:"E-IC-3",n:"Ingeniería de Control"},{c:"E-PRI-3",n:"Programación de Robots Industriales"},{c:"E-DMEC-3",n:"Diseño Mecánico"},{c:"E-CACN-3",n:"Sistemas CAM CNC"},{c:"E-DSME-3",n:"Diseño de Sistemas Mecatrónicos"}],
+        "9":[{c:"B-ING8-3",n:"Inglés VIII"},{c:"E-SEI-3",n:"Sistemas Eléctricos Industriales"},{c:"E-COAV-3",n:"Control Avanzado"},{c:"E-ADMA-3",n:"Administración de Mantenimiento"},{c:"E-IAPC-3",n:"Ingeniería Asistida por Computadora"},{c:"E-SMF-3",n:"Sistemas de Manufactura Flexible"},{c:"E-PIN3-3",n:"Proyecto Integrador III"}],
+        "10":{e:true,n:"Estadía — Licenciatura en Ingeniería Mecatrónica"}
+    },
+    "IE":{
+        "1":[{c:"B-FMA-1",n:"Fundamentos Matemáticos"},{c:"B-QBA-1",n:"Química Básica"},{c:"B-CHD-1",n:"Comunicación y Habilidades Digitales"},{c:"B-ING1-1",n:"Inglés I"},{c:"T-DHU-1",n:"Desarrollo Humano y Valores"},{c:"E-INE-1",n:"Introducción a la Electromovilidad"},{c:"E-MET-1",n:"Metrología"}],
+        "2":[{c:"B-FIS-1",n:"Física"},{c:"B-CDI-1",n:"Cálculo Diferencial"},{c:"B-ING2-1",n:"Inglés II"},{c:"B-PES-1",n:"Probabilidad y Estadística"},{c:"T-HSMC-1",n:"Habilidades Socioemocionales y Manejo de Conflictos"},{c:"E-DIT-1",n:"Dibujo Técnico"},{c:"E-CIE-1",n:"Circuitos Eléctricos"}],
+        "3":[{c:"B-ING3-1",n:"Inglés III"},{c:"B-CIN-1",n:"Cálculo Integral"},{c:"E-PINI-1",n:"Proyecto Integrador I"},{c:"T-DPTD-1",n:"Desarrollo del Pensamiento y Toma de Decisiones"},{c:"E-ELA-1",n:"Electrónica Analógica"},{c:"E-MOE-1",n:"Motores Eléctricos"},{c:"E-SIM-1",n:"Sistemas Mecánicos"}],
+        "4":[{c:"B-CVV-2",n:"Cálculo de Varias Variables"},{c:"B-EPM-2",n:"Estructura y Propiedad de los Materiales"},{c:"T-EPR-2",n:"Ética Profesional"},{c:"B-ING4-2",n:"Inglés IV"},{c:"E-DAC-2",n:"Dibujo Asistido por Computadora"},{c:"E-ELD-2",n:"Electrónica Digital"},{c:"E-SESE-2",n:"Seguridad Eléctrica en Sistemas de Electromovilidad"}],
+        "5":[{c:"B-EDI-2",n:"Ecuaciones Diferenciales"},{c:"B-ING5-2",n:"Inglés V"},{c:"T-LEAD-2",n:"Liderazgo de Equipos de Alto Desempeño"},{c:"E-PIN2-2",n:"Proyecto Integrador II"},{c:"E-CDM-2",n:"Control de Motores"},{c:"E-EDP-2",n:"Electrónica de Potencia"},{c:"E-FDE-2",n:"Fuentes de Energía"}],
+        "6":{e:true,n:"Estadía TSU en Electromovilidad"},
+        "7":[{c:"B-ING6-3",n:"Inglés VI"},{c:"T-HGE-3",n:"Habilidades Gerenciales"},{c:"B-TER-3",n:"Termodinámica"},{c:"B-FIN-3",n:"Física para la Ingeniería"},{c:"E-INI-3",n:"Instrumentación Industrial"},{c:"E-COM-3",n:"Control Moderno"},{c:"E-SAE-3",n:"Sensores y Actuadores en la Electromovilidad"}],
+        "8":[{c:"B-ING7-3",n:"Inglés VII"},{c:"E-SUS-3",n:"Sustentabilidad"},{c:"E-AUT-3",n:"Automatización"},{c:"E-EPA-3",n:"Electrónica de Potencia Avanzada"},{c:"E-MTV-3",n:"Mecánica de Transmisión en el Vehículo"},{c:"E-MEE-3",n:"Mecánica Estructural"},{c:"E-SIE-3",n:"Sistemas Embebidos"}],
+        "9":[{c:"B-ING8-3",n:"Inglés VIII"},{c:"E-PIN3-3",n:"Proyecto Integrador III"},{c:"E-DSE-3",n:"Diagnóstico en Sistemas de Electromoción"},{c:"E-MSE-3",n:"Mantenimiento a Sistemas de Electromovilidad"},{c:"E-VEE-3",n:"Vehículos Eléctricos"},{c:"E-ECC-3",n:"Economía Circular"},{c:"E-EPS-3",n:"Evaluación de Proyectos Sustentables"}],
+        "10":{e:true,n:"Estadía — Licenciatura en Ingeniería en Electromovilidad"}
+    },
+    "LNM":{
+        "1":[{c:"B-ING1-1",n:"Inglés I"},{c:"E-CHD-1",n:"Comunicación y Habilidades Digitales"},{c:"T-DHU-1",n:"Desarrollo Humano y Valores"},{c:"E-MER-1",n:"Mercadotecnia"},{c:"E-MAT-1",n:"Matemáticas"},{c:"E-INF-1",n:"Informática"},{c:"E-FAEE-1",n:"Fundamentos de Administración y Entorno Empresarial"}],
+        "2":[{c:"B-ING2-1",n:"Inglés II"},{c:"T-HSMC-1",n:"Habilidades Socioemocionales y Manejo de Conflictos"},{c:"E-EST1-1",n:"Estadística I"},{c:"E-PLE-1",n:"Planeación Estratégica"},{c:"E-CPN-1",n:"Contabilidad para Negocios"},{c:"E-CDC-1",n:"Comportamiento del Consumidor"},{c:"E-ECO-1",n:"Economía"}],
+        "3":[{c:"B-ING3-1",n:"Inglés III"},{c:"T-DPTD-1",n:"Desarrollo del Pensamiento y Toma de Decisiones"},{c:"E-LCO-1",n:"Legislación Comercial"},{c:"E-EST2-1",n:"Estadística II"},{c:"E-SIM1-1",n:"Sistema de Investigación de Mercados I"},{c:"E-EPP-1",n:"Estrategia de Producto y Precio"},{c:"E-PIN1-1",n:"Proyecto Integrador I"}],
+        "4":[{c:"B-ING4-2",n:"Inglés IV"},{c:"T-EPR-2",n:"Ética Profesional"},{c:"E-MPR-2",n:"Mezcla Promocional"},{c:"E-DDM-2",n:"Diseño Digital y Multimedia"},{c:"E-SIM2-2",n:"Sistema de Investigación de Mercados II"},{c:"E-GDV-2",n:"Gestión de Ventas"},{c:"E-ADT-2",n:"Administración del Tiempo"}],
+        "5":[{c:"B-ING5-2",n:"Inglés V"},{c:"T-LEAD-2",n:"Liderazgo de Equipos de Alto Desempeño"},{c:"E-LYD-2",n:"Logística y Distribución"},{c:"E-MDS-2",n:"Mercadotecnia de Servicios"},{c:"E-MD1-2",n:"Mercadotecnia Digital I"},{c:"E-MES-2",n:"Mercadotecnia Estratégica"},{c:"E-PIN2-2",n:"Proyecto Integrador II"}],
+        "6":{e:true,n:"Estadía TSU en Mercadotecnia"},
+        "7":[{c:"B-ING6-3",n:"Inglés VI"},{c:"T-HGE-3",n:"Habilidades Gerenciales"},{c:"E-EAN-3",n:"Estadística Aplicada a los Negocios"},{c:"E-MIN-3",n:"Mercadotecnia Internacional"},{c:"E-DNP-3",n:"Desarrollo de Nuevos Productos"},{c:"E-TMCG-3",n:"Tendencias del Mercado y Consumidor Global"},{c:"E-POT-3",n:"Planeación y Organización del Trabajo"}],
+        "8":[{c:"B-ING7-3",n:"Inglés VII"},{c:"E-MD2-3",n:"Mercadotecnia Digital II"},{c:"E-IDM-3",n:"Inteligencia de Mercados"},{c:"E-GDC-3",n:"Gestión de la Calidad"},{c:"E-INF-3",n:"Inteligencia Financiera"},{c:"E-ADP-3",n:"Administración de la Producción"},{c:"E-GTH-3",n:"Gestión del Talento Humano"}],
+        "9":[{c:"B-ING8-3",n:"Inglés VIII"},{c:"E-CEM-3",n:"Cultura Emprendedora"},{c:"E-CDS-3",n:"Cadena de Suministro"},{c:"E-PDN-3",n:"Plan de Negocios"},{c:"E-CIM-3",n:"Comunicación Integral de la Mercadotecnia"},{c:"E-DCO-3",n:"Derecho Corporativo"},{c:"E-PIN3-3",n:"Proyecto Integrador III"}],
+        "10":{e:true,n:"Estadía — Licenciatura en Negocios y Mercadotecnia"}
+    },
+    "LLI":{
+        "1":[{c:"B-ING1-1",n:"Inglés I"},{c:"T-DHU-1",n:"Desarrollo Humano y Valores"},{c:"E-FPE-1",n:"Fundamentos Pedagógicos de la Educación"},{c:"E-PEED-1",n:"Psicología Educativa y Etapas del Desarrollo"},{c:"B-FMA-1",n:"Fundamentos de Matemáticas"},{c:"E-EDM-1",n:"La Educación en México"},{c:"B-CHD-1",n:"Comunicación y Habilidades Digitales"}],
+        "2":[{c:"B-ING2-1",n:"Inglés II"},{c:"T-HSMC-1",n:"Habilidades Socioemocionales y Manejo de Conflictos"},{c:"E-MDI1-1",n:"Metodología de la Didáctica I"},{c:"E-DMD1-1",n:"Diseño de Material Didáctico I"},{c:"B-PES-F",n:"Probabilidad y Estadística Aplicadas a la Educación"},{c:"E-EPEA-1",n:"Evaluación del Proceso de Enseñanza-Aprendizaje"},{c:"E-MEI-1",n:"Metodología de la Investigación"}],
+        "3":[{c:"B-ING3-1",n:"Inglés III"},{c:"T-DPTD-1",n:"Desarrollo del Pensamiento y Toma de Decisiones"},{c:"E-MDI2-1",n:"Metodología de la Didáctica II"},{c:"E-DMD2-1",n:"Diseño de Material Didáctico II"},{c:"E-INEV-1",n:"Instrumentos de Evaluación"},{c:"E-PLE-1",n:"Planeación Educativa"},{c:"E-PIN1-1",n:"Proyecto Integrador I"}],
+        "4":[{c:"B-ING4-2",n:"Inglés IV"},{c:"T-EPR-2",n:"Ética Profesional"},{c:"E-FON-2",n:"Fonética"},{c:"E-DSA1-2",n:"Diseño de Situaciones de Aprendizaje I"},{c:"E-MEC-2",n:"Metodología de la Enseñanza de Contenidos"},{c:"E-EELI1-2",n:"Estrategias de Enseñanza de la Lengua Inglesa I"},{c:"E-EEGI-2",n:"Enseñanza de Estructura Gramatical Inglesa"}],
+        "5":[{c:"B-ING5-2",n:"Inglés V"},{c:"T-LEAD-2",n:"Liderazgo de Equipos de Alto Desempeño"},{c:"E-EHP-2",n:"Enseñanza de Habilidades Productivas"},{c:"E-DSA2-2",n:"Diseño de Situaciones de Aprendizaje II"},{c:"E-EELI2-2",n:"Estrategias de Enseñanza de la Lengua Inglesa II"},{c:"E-EHR-2",n:"Enseñanza de Habilidades Receptivas"},{c:"E-PIN2-2",n:"Proyecto Integrador II"}],
+        "6":{e:true,n:"Estadía TSU en Enseñanza del Idioma Inglés"},
+        "7":[{c:"B-ING6-3",n:"Inglés VI"},{c:"T-HGE-3",n:"Habilidades Gerenciales"},{c:"E-IEVA-3",n:"Investigación Evaluativa"},{c:"E-POED-3",n:"Política Educativa"},{c:"E-ADU-3",n:"Administración Educativa"},{c:"E-PSPE-3",n:"Psicopedagogía"},{c:"E-PSLI-3",n:"Psicolingüística"}],
+        "8":[{c:"B-ING7-3",n:"Inglés VII"},{c:"E-NEEM-3",n:"Negociación Empresarial"},{c:"E-EVED-3",n:"Evaluación Educativa"},{c:"E-GEE1-3",n:"Gestión Educativa I"},{c:"E-ADES-3",n:"Administración Escolar"},{c:"E-DICU-3",n:"Diseño Curricular"},{c:"E-PLOP-3",n:"Planeación y Organización de Proyectos"}],
+        "9":[{c:"B-ING8-3",n:"Inglés VIII"},{c:"E-GAPP-3",n:"Gestión y Administración de Proyectos"},{c:"E-DEDC-3",n:"Diseño de Entornos Digitales Colaborativos"},{c:"E-GEE2-3",n:"Gestión Educativa II"},{c:"E-CAIE-3",n:"Calidad en las Instituciones Educativas"},{c:"E-DIIN-3",n:"Diseño Instruccional"},{c:"E-PIN3-3",n:"Proyecto Integrador III"}],
+        "10":{e:true,n:"Estadía — Licenciatura en Educación"}
+    }
+};
+
+let esEstadia = false;
+
+// ===== CARRERA CAMBIA → llenar cuatrimestres =====
+function onCarreraChange() {
+    const k = document.getElementById('carrera-sel').value;
+    const s = document.getElementById('cuatrimestre');
+    s.innerHTML = '<option value="">-- Selecciona el cuatrimestre --</option>';
+    document.getElementById('materias-container').style.display = 'none';
+    document.getElementById('estadia-section').style.display = 'none';
+    document.getElementById('materias-grid').innerHTML = '';
     document.getElementById('materias-hidden').value = '';
-    if (!cuatri) { cont.style.display = 'none'; return; }
-    cont.style.display = 'block';
-    (catalogoMaterias[cuatri] || []).forEach(m => {
-        const card = document.createElement('div');
-        card.className = 'materia-card';
-        card.innerHTML = `
-            <i class="fas fa-circle-check check-icon"></i>
-            <div>
-                <div class="materia-nombre">${m.nombre}</div>
-                <div class="materia-clave">${m.clave}</div>
-            </div>
-            <input type="checkbox" value="${m.clave}|${m.nombre}">
-        `;
-        card.addEventListener('click', () => {
-            const cb = card.querySelector('input[type="checkbox"]');
-            cb.checked = !cb.checked;
-            card.classList.toggle('seleccionada', cb.checked);
-            actualizarContador();
+    document.getElementById('es-estadia').value = '0';
+    esEstadia = false;
+    if (!k) { document.getElementById('cuatri-group').style.display = 'none'; return; }
+    document.getElementById('cuatri-group').style.display = 'block';
+    for (let i = 1; i <= 10; i++) {
+        const o = document.createElement('option');
+        o.value = i; o.textContent = CL[i]; s.appendChild(o);
+    }
+}
+
+// ===== CUATRIMESTRE CAMBIA → mostrar materias o estadía =====
+function onCuatriChange() {
+    const k = document.getElementById('carrera-sel').value;
+    const q = document.getElementById('cuatrimestre').value;
+    const grid = document.getElementById('materias-grid');
+    document.getElementById('materias-container').style.display = 'none';
+    document.getElementById('estadia-section').style.display = 'none';
+    grid.innerHTML = '';
+    document.getElementById('materias-hidden').value = '';
+    document.getElementById('materias-contador').textContent = '0 materias seleccionadas';
+    document.getElementById('es-estadia').value = '0';
+    esEstadia = false;
+    if (!k || !q) return;
+    const d = P[k][q];
+    if (!d) return;
+    if (d.e) {
+        esEstadia = true;
+        document.getElementById('es-estadia').value = '1';
+        document.getElementById('estadia-titulo').textContent = d.n;
+        document.getElementById('estadia-section').style.display = 'block';
+        document.getElementById('materias-hidden').value = JSON.stringify([]);
+    } else {
+        document.getElementById('materias-container').style.display = 'block';
+        d.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'materia-card';
+            card.innerHTML = `
+                <i class="fas fa-circle-check check-icon"></i>
+                <div>
+                    <div class="materia-nombre">${m.n}</div>
+                    <div class="materia-clave">${m.c}</div>
+                </div>
+                <input type="checkbox" value="${m.c}|${m.n}">
+            `;
+            card.addEventListener('click', () => {
+                const cb = card.querySelector('input[type="checkbox"]');
+                cb.checked = !cb.checked;
+                card.classList.toggle('seleccionada', cb.checked);
+                actualizarContador();
+            });
+            grid.appendChild(card);
         });
-        grid.appendChild(card);
-    });
+    }
 }
 
 function actualizarContador() {
     const sel = document.querySelectorAll('.materia-card.seleccionada');
-    const n   = sel.length;
+    const n = sel.length;
     document.getElementById('materias-contador').textContent =
         n + ' materia' + (n !== 1 ? 's' : '') + ' seleccionada' + (n !== 1 ? 's' : '');
     document.getElementById('materias-hidden').value =
@@ -411,26 +541,29 @@ function validarPaso(paso) {
         const nom = document.getElementById('nombre').value.trim();
         const cor = document.getElementById('correo').value.trim();
         const tel = document.getElementById('telefono').value.trim();
-        if (mat.length < 8)    { alert('⚠️ La matrícula debe tener entre 8 y 10 dígitos.'); return false; }
-        if (nom.length < 5)    { alert('⚠️ Ingresa tu nombre completo.'); return false; }
-        if (!cor.includes('@')){ alert('⚠️ Ingresa un correo válido.'); return false; }
-        if (tel.length !== 10) { alert('⚠️ El teléfono debe tener 10 dígitos.'); return false; }
+        if (!mat || !/^[0-9]+$/.test(mat)) { alert('La matrícula debe contener solo números.'); return false; }
+        if (nom.length < 5)    { alert('Ingresa tu nombre completo.'); return false; }
+        if (!cor.includes('@')){ alert('Ingresa un correo válido.'); return false; }
+        if (tel.length !== 10) { alert('El teléfono debe tener 10 dígitos.'); return false; }
     }
     if (paso === 2) {
-        if (!document.getElementById('cuatrimestre').value) { alert('⚠️ Selecciona el cuatrimestre.'); return false; }
-        if (!document.querySelectorAll('.materia-card.seleccionada').length) { alert('⚠️ Selecciona al menos una materia.'); return false; }
+        if (!document.getElementById('carrera-sel').value)  { alert('Selecciona tu carrera.'); return false; }
+        if (!document.getElementById('cuatrimestre').value) { alert('Selecciona el cuatrimestre.'); return false; }
+        if (!esEstadia && !document.querySelectorAll('.materia-card.seleccionada').length) {
+            alert('Selecciona al menos una materia.'); return false;
+        }
     }
     if (paso === 3) {
-        if (!document.getElementById('comprobante').files.length)         { alert('⚠️ Sube el comprobante de pago.'); return false; }
-        if (!document.getElementById('fecha_pago').value)                 { alert('⚠️ Ingresa la fecha de pago.'); return false; }
-        if (!document.getElementById('referencia_pago').value.trim())     { alert('⚠️ Ingresa el número de referencia.'); return false; }
+        if (!document.getElementById('comprobante').files.length)         { alert('Sube el comprobante de pago.'); return false; }
+        if (!document.getElementById('fecha_pago').value)                 { alert('Ingresa la fecha de pago.'); return false; }
+        if (!document.getElementById('referencia_pago').value.trim())     { alert('Ingresa el número de referencia.'); return false; }
     }
     return true;
 }
 
 function actualizarResumen() {
     const v = id => document.getElementById(id).value || '—';
-    const f = id => { const files = document.getElementById(id).files; return files.length ? '✅ ' + files[0].name : '❌ Sin archivo'; };
+    const f = id => { const files = document.getElementById(id).files; return files.length ? files[0].name : 'Sin archivo'; };
     document.getElementById('res-matricula').textContent   = v('matricula');
     document.getElementById('res-nombre').textContent      = v('nombre');
     document.getElementById('res-correo').textContent      = v('correo');
@@ -438,15 +571,23 @@ function actualizarResumen() {
     document.getElementById('res-comprobante').textContent = f('comprobante');
     document.getElementById('res-fecha-pago').textContent  = v('fecha_pago');
     document.getElementById('res-referencia').textContent  = v('referencia_pago');
+    const carreraSel = document.getElementById('carrera-sel');
+    document.getElementById('res-carrera').textContent = CN[carreraSel.value] || '—';
     const cuatriSel = document.getElementById('cuatrimestre');
     document.getElementById('res-cuatrimestre').textContent = cuatriSel.options[cuatriSel.selectedIndex]?.text || '—';
-    const sel = document.querySelectorAll('.materia-card.seleccionada');
-    document.getElementById('res-materias').innerHTML = sel.length
-        ? Array.from(sel).map(c => `<span class="tag-materia">${c.querySelector('.materia-nombre').textContent}</span>`).join('')
-        : '—';
+    if (esEstadia) {
+        document.getElementById('res-materias-wrap').style.display = 'none';
+        document.getElementById('res-estadia-wrap').style.display  = 'block';
+    } else {
+        document.getElementById('res-materias-wrap').style.display = 'block';
+        document.getElementById('res-estadia-wrap').style.display  = 'none';
+        const sel = document.querySelectorAll('.materia-card.seleccionada');
+        document.getElementById('res-materias').innerHTML = sel.length
+            ? Array.from(sel).map(c => `<span class="tag-materia">${c.querySelector('.materia-nombre').textContent}</span>`).join('')
+            : '—';
+    }
 }
-
-function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
+function toggleMenu() { document.getElementById("mobileMenu").classList.toggle("active"); }
 </script>
 </body>
 </html>

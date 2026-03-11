@@ -73,21 +73,35 @@
                 <p><strong>Matrícula:</strong> {{ matricula }}</p>
                 <p><strong>Nombre:</strong> {{ nombre }}</p>
                 <p><strong>Correo:</strong> {{ correo }}</p>
+                <p><strong>Carrera:</strong> {{ carrera }}</p>
                 <p><strong>Cuatrimestre:</strong> {{ cuatrimestre }}° Cuatrimestre</p>
                 <p><strong>Referencia de Pago:</strong> {{ referencia_pago }}</p>
-                <p><strong>Materias inscritas:</strong></p>
-                <div style="margin-top:6px;">
-                    {% for materia in materias %}
-                        <span class="tag-materia">{{ materia }}</span>
-                    {% endfor %}
-                </div>
+                {% if es_estadia %}
+                    <p><strong>Tipo:</strong>
+                        <span style="display:inline-block;background:var(--nl-orange);color:#fff;font-size:.78rem;padding:3px 12px;border-radius:20px;font-weight:700;">
+                            <i class="fas fa-briefcase"></i> ESTADÍA
+                        </span>
+                    </p>
+                {% else %}
+                    <p><strong>Materias inscritas:</strong></p>
+                    <div style="margin-top:6px;">
+                        {% for materia in materias %}
+                            <span class="tag-materia">{{ materia }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
             </div>
 
             <div class="aviso">
                 <i class="fas fa-info-circle" style="color:var(--nl-orange)"></i>
-                <strong> Próximos pasos:</strong> Control Escolar validará tu pago y materias
-                en un plazo de <strong>2 a 3 días hábiles</strong>. Recibirás confirmación
-                a tu correo institucional.
+                <strong> Próximos pasos:</strong>
+                {% if es_estadia %}
+                    Control Escolar revisará tu registro de estadía en un plazo de
+                    <strong>3 a 5 días hábiles</strong>. Recibirás confirmación a tu correo institucional.
+                {% else %}
+                    Control Escolar validará tu pago y materias en un plazo de
+                    <strong>2 a 3 días hábiles</strong>. Recibirás confirmación a tu correo institucional.
+                {% endif %}
             </div>
 
             <div class="btn-group-exito">
@@ -107,7 +121,7 @@
         <div class="footer-section">
             <h4>Contacto</h4>
             <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
-            <p><i class="fas fa-envelope"></i> soporte@utsc.edu.mx</p>
+            <p><i class="fas fa-envelope"></i> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="5724382738252332172223243479323322793a2f">[email&#160;protected]</a></p>
         </div>
         <div class="footer-section">
             <h4>Gobierno de Nuevo León</h4>
@@ -116,7 +130,6 @@
         </div>
     </div>
 </footer>
-
 <script>
 function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
 </script>

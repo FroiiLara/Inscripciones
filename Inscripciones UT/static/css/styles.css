@@ -164,24 +164,35 @@ body::before {
     transform: none; /* Quitamos la transformación del hover para enlaces */
 }
 
+/* Ocultar ícono de ojo nativo del navegador (Edge, IE, Chrome) */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear,
+input[type="password"]::-webkit-contacts-auto-fill-button,
+input[type="password"]::-webkit-credentials-auto-fill-button {
+    display: none !important;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 /* Password Toggle Icon */
 .toggle-password {
     position: absolute;
-    right: 12px;
+    right: 14px;
     top: 50%;
     transform: translateY(-50%);
-    width: 20px;
-    height: 20px;
     cursor: pointer;
     background: transparent;
     border: none;
-    color: #666;
+    outline: none;
+    color: #888;
     transition: color 0.2s ease;
     z-index: 4;
     display: flex;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
     padding: 0;
+    width: auto;
+    height: auto;
 }
 
 .toggle-password:hover {
@@ -189,8 +200,9 @@ body::before {
 }
 
 .toggle-password i {
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1;
+    pointer-events: none;
 }
 
 /* El input dentro de password-group necesita espacio a la derecha para el ojo */

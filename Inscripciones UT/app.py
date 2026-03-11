@@ -426,25 +426,44 @@ def reinscripcion_submit():
     nombre          = request.form.get('nombre', '').strip()
     correo          = request.form.get('correo', '').strip().lower()
     telefono        = request.form.get('telefono', '').strip()
+    carrera_clave   = request.form.get('carrera_clave', '').strip()
     cuatrimestre    = request.form.get('cuatrimestre', '').strip()
     referencia_pago = request.form.get('referencia_pago', '').strip()
     fecha_pago      = request.form.get('fecha_pago', '').strip()
+    es_estadia      = request.form.get('es_estadia', '0').strip() == '1'
 
-    # Materias vienen como JSON: ["MAT201|Cálculo Diferencial", ...]
+    # Matrícula: solo números, sin restricción de longitud
+    if not matricula or not matricula.isdigit():
+        flash("La matrícula debe contener solo números.", "error")
+        return redirect(url_for('reinscripcion'))
+
+    # Nombre completo de carrera
+    CARRERAS = {
+        'ITID': 'Ing. en Tecnologías de la Información e Innovación Digital',
+        'II':   'Ingeniería Industrial',
+        'IMI':  'Ing. en Mantenimiento Industrial',
+        'IMT':  'Ingeniería Mecatrónica',
+        'IE':   'Ingeniería en Electromovilidad',
+        'LNM':  'Lic. en Negocios y Mercadotecnia',
+        'LLI':  'Lic. en Educación (Enseñanza del Idioma Inglés)'
+    }
+    carrera_nombre = CARRERAS.get(carrera_clave, carrera_clave)
+
+    # Materias vienen como JSON: ["CLAVE|Nombre", ...]
     materias_raw = request.form.get('materias', '[]')
     try:
         materias_lista = json.loads(materias_raw)
-        # Convertir "CLAVE|Nombre" → solo el nombre legible
         materias = [m.split('|')[1] if '|' in m else m for m in materias_lista]
     except Exception:
         materias = []
 
     # ===== VALIDACIÓN BACKEND =====
-    if not all([matricula, nombre, correo, telefono, cuatrimestre, referencia_pago, fecha_pago]):
+    if not all([nombre, correo, telefono, carrera_clave, cuatrimestre, referencia_pago, fecha_pago]):
         flash("Todos los campos son obligatorios.", "error")
         return redirect(url_for('reinscripcion'))
 
-    if not materias:
+    # Solo exigir materias si NO es estadía
+    if not es_estadia and not materias:
         flash("Debes seleccionar al menos una materia.", "error")
         return redirect(url_for('reinscripcion'))
 
@@ -475,7 +494,10 @@ def reinscripcion_submit():
         'nombre'         : nombre,
         'correo'         : correo,
         'telefono'       : telefono,
+        'carrera_clave'  : carrera_clave,
+        'carrera'        : carrera_nombre,
         'cuatrimestre'   : cuatrimestre,
+        'es_estadia'     : es_estadia,
         'materias'       : materias,
         'comprobante'    : comprobante,
         'fecha_pago'     : fecha_pago,
@@ -489,7 +511,9 @@ def reinscripcion_submit():
         matricula       = matricula,
         nombre          = nombre,
         correo          = correo,
+        carrera         = carrera_nombre,
         cuatrimestre    = cuatrimestre,
+        es_estadia      = es_estadia,
         materias        = materias,
         referencia_pago = referencia_pago,
         fecha_pago      = fecha_pago
