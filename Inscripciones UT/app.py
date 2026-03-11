@@ -2,6 +2,9 @@ import os
 import re
 import uuid
 from datetime import timedelta
+from datetime import datetime
+MAX_INTENTOS = 5
+TIEMPO_BLOQUEO_MINUTOS = 15
 from dotenv import load_dotenv
 from flask import (
     Flask, request, render_template,
@@ -165,7 +168,9 @@ def registro():
             'matricula': matricula,
             'usuario': usuario,
             'email': email,
-            'contrasena': hashed
+            'contrasena': hashed,
+            'intentos_fallidos': 0,
+                'bloqueado_hasta': None
         })
 
         flash("Registro exitoso. Inicia sesión.", "success")
@@ -176,6 +181,7 @@ def registro():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+
     if request.method == 'POST':
 
         matricula   = str(request.form.get('matricula', '')).strip()
@@ -184,19 +190,85 @@ def login():
         if not matricula or not contrasena:
             abort(400)
 
-        user = collection.find_one({'matricula': {"$eq": matricula}})
+        user = collection.find_one({'matricula': matricula})
 
-        if user and bcrypt.check_password_hash(user['contrasena'], contrasena):
+        if not user:
+            flash("Matrícula o contraseña incorrectos.", "error")
+            return render_template('login.html')
 
-            access_token = create_access_token(identity=matricula)
+        # =========================
+        # VERIFICAR SI ESTA BLOQUEADO
+        # =========================
+
+        bloqueado_hasta = user.get('bloqueado_hasta')
+
+        if bloqueado_hasta and datetime.utcnow() < bloqueado_hasta:
+            minutos_restantes = int((bloqueado_hasta - datetime.utcnow()).total_seconds() / 60)
+            flash(f"Cuenta bloqueada temporalmente. Intente nuevamente en {minutos_restantes} minutos.", "error")
+            return render_template('login.html')
+
+        # =========================
+        # VALIDAR CONTRASEÑA
+        # =========================
+
+        if bcrypt.check_password_hash(user['contrasena'], contrasena):
+
+            # resetear intentos
+            collection.update_one(
+                {'_id': user['_id']},
+                {
+                    '$set': {
+                        'intentos_fallidos': 0,
+                        'bloqueado_hasta': None
+                    }
+                }
+            )
+
+            access_token = create_access_token(identity=user['matricula'])
 
             response = redirect(url_for('pagina_principal'))
             set_access_cookies(response, access_token)
 
             return response
 
-        flash("Matrícula o contraseña incorrectos.", "error")
-        return render_template('login.html'), 401
+        # =========================
+        # CONTRASEÑA INCORRECTA
+        # =========================
+
+        intentos = user.get('intentos_fallidos', 0) + 1
+
+        if intentos >= MAX_INTENTOS:
+
+            bloqueo = datetime.utcnow() + timedelta(minutes=TIEMPO_BLOQUEO_MINUTOS)
+
+            collection.update_one(
+                {'_id': user['_id']},
+                {
+                    '$set': {
+                        'intentos_fallidos': intentos,
+                        'bloqueado_hasta': bloqueo
+                    }
+                }
+            )
+
+            flash("Demasiados intentos fallidos. Cuenta bloqueada por 15 minutos.", "error")
+
+        else:
+
+            restantes = MAX_INTENTOS - intentos
+
+            collection.update_one(
+                {'_id': user['_id']},
+                {
+                    '$set': {
+                        'intentos_fallidos': intentos
+                    }
+                }
+            )
+
+            flash(f"Contraseña incorrecta. Te quedan {restantes} intentos.", "error")
+
+        return render_template('login.html')
 
     return render_template('login.html')
 

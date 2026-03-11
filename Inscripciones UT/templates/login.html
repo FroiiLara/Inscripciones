@@ -1,93 +1,94 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Iniciar Sesión</title>
-
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link rel="stylesheet" href="../static/css/styles.css">
-<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
-<script defer src="{{ url_for('static', filename='app.js') }}"></script>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <script defer src="{{ url_for('static', filename='app.js') }}"></script>
 </head>
 
 <body>
 
-<div class="login-container">
+    <div class="login-container">
 
-<form class="login-form" action="/login" method="POST">
+        <form class="login-form" action="/login" method="POST">
 
-<img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
+            <!-- Logo -->
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
 
-<h2>Iniciar Sesión</h2>
+            <h2>Iniciar Sesión</h2>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-{% if messages %}
-{% for category, message in messages %}
+            <!-- Mensajes Flash -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="{{ 'success-message' if category == 'success' else 'error-message' }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-<div class="{{ 'success-message' if category == 'success' else 'error-message' }}">
-{{ message }}
-</div>
+            <!-- Matrícula -->
+            <div class="form-group">
+                <i class="fas fa-id-badge icon"></i>
 
-{% endfor %}
-{% endif %}
-{% endwith %}
+                <input
+                    type="text"
+                    name="matricula"
+                    placeholder="Matrícula"
+                    required
+                    minlength="4"
+                    maxlength="12"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                    title="Ingresa solo números">
+            </div>
 
-<!-- Matrícula -->
-<div class="form-group">
+            <!-- Contraseña -->
+            <div class="form-group password-group">
+                <i class="fas fa-lock icon"></i>
 
-<i class="fas fa-id-badge icon"></i>
+                <input
+                    type="password"
+                    name="contrasena"
+                    id="password"
+                    placeholder="Contraseña"
+                    required>
 
-<input 
-type="text"
-name="matricula"
-placeholder="Matrícula"
-required
-minlength="4"
-maxlength="12"
-inputmode="numeric"
-pattern="[0-9]*"
-oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-title="Ingresa solo números">
+                <span class="toggle-password" id="togglePassword">
+                    <i class="fas fa-eye"></i>
+                </span>
+            </div>
 
-</div>
+            <!-- Botón -->
+            <button type="submit" class="btn">
+                Iniciar Sesión
+            </button>
 
-<!-- Contraseña -->
-<div class="form-group password-group">
+            <!-- Recuperar contraseña -->
+            <p class="forgot-password">
+                <a href="/recuperar_contrasena">
+                    ¿Olvidaste tu contraseña?
+                </a>
+            </p>
 
-<i class="fas fa-lock icon"></i>
+            <!-- Registro -->
+            <div class="signup-link">
+                <p>
+                    ¿No tienes cuenta?
+                    <a href="/registro" class="signup-text">
+                        ¡Crea una aquí!
+                    </a>
+                </p>
+            </div>
 
-<input
-type="password"
-name="contrasena"
-placeholder="Contraseña"
-id="password"
-required>
-
-<span class="toggle-password" id="togglePassword">
-<i class="fas fa-eye"></i>
-</span>
-
-</div>
-
-<button type="submit" class="btn">Iniciar Sesión</button>
-
-<p class="forgot-password">
-<a href="/recuperar_contrasena">¿Olvidaste tu contraseña?</a>
-</p>
-
-<div class="signup-link">
-<p>
-¿No tienes cuenta?
-<a href="/registro" class="signup-text">¡Crea una aquí!</a>
-</p>
-</div>
-
-</form>
-
-</div>
-
+        </form>
+    </div>
 </body>
 </html>
