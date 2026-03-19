@@ -3,7 +3,7 @@ import re
 import uuid
 from datetime import timedelta
 from datetime import datetime
-MAX_INTENTOS = 5
+MAX_INTENTOS = 3
 TIEMPO_BLOQUEO_MINUTOS = 15
 from dotenv import load_dotenv
 from flask import (
