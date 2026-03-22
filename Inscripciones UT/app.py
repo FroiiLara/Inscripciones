@@ -86,7 +86,12 @@ def validar_no_sql_injection(dato):
 def inject_user():
     try:
         verify_jwt_in_request(optional=True)
-        usuario = get_jwt_identity()
+        matricula = get_jwt_identity()
+        if matricula:
+            user = collection.find_one({"matricula": matricula})
+            usuario = user["usuario"] if user else matricula
+        else:
+            usuario = None
     except Exception:
         usuario = None
     return dict(usuario=usuario)
@@ -194,7 +199,8 @@ def login():
 
         if not user:
             flash("Matrícula o contraseña incorrectos.", "error")
-            return render_template('login.html')
+            # Se devuelve la matrícula para no perder el campo al recargar
+            return render_template('login.html', matricula_guardada=matricula)
 
         # =========================
         # VERIFICAR SI ESTA BLOQUEADO
@@ -205,7 +211,7 @@ def login():
         if bloqueado_hasta and datetime.utcnow() < bloqueado_hasta:
             minutos_restantes = int((bloqueado_hasta - datetime.utcnow()).total_seconds() / 60)
             flash(f"Cuenta bloqueada temporalmente. Intente nuevamente en {minutos_restantes} minutos.", "error")
-            return render_template('login.html')
+            return render_template('login.html', matricula_guardada=matricula)
 
         # =========================
         # VALIDAR CONTRASEÑA
@@ -268,7 +274,7 @@ def login():
 
             flash(f"Contraseña incorrecta. Te quedan {restantes} intentos.", "error")
 
-        return render_template('login.html')
+        return render_template('login.html', matricula_guardada=matricula)
 
     return render_template('login.html')
 
@@ -319,22 +325,28 @@ def mi_perfil():
 @app.route('/inscripcion')
 @jwt_required()
 def inscripcion():
-    usuario = get_jwt_identity()
-    return render_template('inscripcion.html', usuario=usuario)
+    matricula = get_jwt_identity()
+    user = collection.find_one({"matricula": matricula})
+    nombre_usuario = user["usuario"] if user else matricula
+    return render_template('inscripcion.html', usuario=nombre_usuario)
 
 
 @app.route('/reinscripcion')
 @jwt_required()
 def reinscripcion():
-    usuario = get_jwt_identity()
-    return render_template('reinscripcion.html', usuario=usuario)
+    matricula = get_jwt_identity()
+    user = collection.find_one({"matricula": matricula})
+    nombre_usuario = user["usuario"] if user else matricula
+    return render_template('reinscripcion.html', usuario=nombre_usuario)
 
 
 @app.route('/soporte')
 @jwt_required()
 def soporte():
-    usuario = get_jwt_identity()
-    return render_template('soporte.html', usuario=usuario)
+    matricula = get_jwt_identity()
+    user = collection.find_one({"matricula": matricula})
+    nombre_usuario = user["usuario"] if user else matricula
+    return render_template('soporte.html', usuario=nombre_usuario)
 
 # ======================================================
 # INSCRIPCIÓN — PROCESAR FORMULARIO MULTI-PASO
@@ -357,6 +369,12 @@ def inscripcion_submit():
     # ===== VALIDACIÓN BACKEND =====
     if not all([nombre, curp, fecha_nac, telefono, carrera, cont_nombre, cont_tel]):
         flash("Todos los campos son obligatorios.", "error")
+        return redirect(url_for('inscripcion'))
+
+    # Validar formato de CURP
+    curp_regex = re.compile(r'^[A-Z]{4}\d{6}[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{2}$')
+    if not curp_regex.match(curp):
+        flash("La CURP no tiene el formato correcto.", "error")
         return redirect(url_for('inscripcion'))
 
     # ===== GUARDAR ARCHIVOS =====

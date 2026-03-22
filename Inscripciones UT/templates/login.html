@@ -41,9 +41,8 @@
                     type="text"
                     name="matricula"
                     placeholder="Matrícula"
+                    value="{{ matricula_guardada or '' }}"
                     required
-                    minlength="4"
-                    maxlength="12"
                     inputmode="numeric"
                     pattern="[0-9]*"
                     oninput="this.value = this.value.replace(/[^0-9]/g, '')"

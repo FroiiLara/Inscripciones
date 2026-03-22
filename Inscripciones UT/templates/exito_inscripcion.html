@@ -24,6 +24,29 @@
         .datos-resumen p  { margin:7px 0; font-size:0.95rem; }
         .aviso { background-color:#fff8e1; border-left:4px solid var(--nl-orange); padding:14px 18px; border-radius:6px; margin:20px 0; font-size:0.9rem; color:#555; text-align:left; }
         .btn-group-exito { display:flex; gap:15px; justify-content:center; flex-wrap:wrap; margin-top:25px; }
+        /* Botón de guardar PDF */
+        .btn-pdf {
+            background-color: #1565c0;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-pdf:hover { background-color: #0d47a1; }
+        /* Estilos de impresión — ocultar navbar, footer y botones de navegación */
+        @media print {
+            header, footer, .btn-group-exito, .aviso { display: none !important; }
+            body { background: white; }
+            .container { box-shadow: none; }
+            .folio-box { background: #1a5f5c !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
     </style>
 </head>
 <body>
@@ -89,6 +112,9 @@
             </div>
 
             <div class="btn-group-exito">
+                <button class="btn-pdf" onclick="window.print()">
+                    <i class="fas fa-file-pdf"></i> Guardar / Imprimir Comprobante
+                </button>
                 <a href="/pagina_principal" class="btn-primary">
                     <i class="fas fa-home"></i> Ir al Inicio
                 </a>

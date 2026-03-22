@@ -2,124 +2,246 @@
 <html lang="es">
 
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Registro de Usuario</title>
-
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link rel="stylesheet" href="../static/css/styles.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
-<script defer src="{{ url_for('static', filename='app.js') }}"></script>
-
+<style>
+    /* Caja de reglas de contraseña visible desde el inicio */
+    .password-rules {
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-top: 6px;
+        font-size: 0.82rem;
+        text-align: left;
+    }
+    .password-rules p {
+        margin: 0 0 5px;
+        font-weight: 600;
+        color: #555;
+    }
+    .rule {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #999;
+        margin: 3px 0;
+        transition: color 0.2s;
+    }
+    .rule.ok {
+        color: #2e7d32;
+    }
+    .rule i {
+        font-size: 0.75rem;
+    }
+    /* Mensaje de error inline debajo del campo */
+    .field-error {
+        color: #c0392b;
+        font-size: 0.8rem;
+        margin-top: 4px;
+        display: none;
+        text-align: left;
+    }
+    .field-error.visible {
+        display: block;
+    }
+</style>
 </head>
 
 <body>
 
 <div class="login-container">
 
-<form class="login-form" action="/registro" method="POST">
+<form class="login-form" id="formRegistro" action="/registro" method="POST" novalidate>
 
-<img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
+    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
 
-<h2>Registro de Usuario</h2>
+    <h2>Registro de Usuario</h2>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-{% if messages %}
-{% for category, message in messages %}
+    <!-- Mensajes Flash del servidor -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="{{ 'success-message' if category == 'success' else 'error-message' }}">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
 
-<div class="{{ 'success-message' if category == 'success' else 'error-message' }}">
-{{ message }}
-</div>
+    <!-- Matrícula -->
+    <div class="form-group">
+        <i class="fas fa-id-card icon"></i>
+        <input
+            type="text"
+            name="matricula"
+            id="matricula"
+            placeholder="Matrícula"
+            value="{{ request.form.get('matricula', '') }}"
+            required
+            inputmode="numeric"
+            pattern="[0-9]*"
+            oninput="this.value = this.value.replace(/[^0-9]/g, ''); validarMatricula();"
+            title="Solo números">
+    </div>
+    <div class="field-error" id="err-matricula">La matrícula debe contener solo números.</div>
 
-{% endfor %}
-{% endif %}
-{% endwith %}
+    <!-- Nombre completo — acepta ñ, acentos y apóstrofe -->
+    <div class="form-group">
+        <i class="fas fa-user icon"></i>
+        <input
+            type="text"
+            name="usuario"
+            id="usuario"
+            placeholder="Nombre completo"
+            value="{{ request.form.get('usuario', '') }}"
+            required
+            minlength="5"
+            maxlength="80"
+            oninput="validarNombre()">
+    </div>
+    <div class="field-error" id="err-usuario">Ingresa tu nombre completo (mínimo 5 caracteres).</div>
 
-<!-- Matrícula -->
-<div class="form-group">
+    <!-- Correo institucional -->
+    <div class="form-group">
+        <i class="fas fa-envelope icon"></i>
+        <input
+            type="email"
+            name="email"
+            id="email"
+            placeholder="Correo institucional @virtual.utsc.edu.mx"
+            value="{{ request.form.get('email', '') }}"
+            required
+            oninput="validarEmail()">
+    </div>
+    <div class="field-error" id="err-email">Debe ser un correo @virtual.utsc.edu.mx</div>
 
-<i class="fas fa-id-card icon"></i>
+    <!-- Contraseña -->
+    <div class="form-group password-group">
+        <i class="fas fa-lock icon"></i>
+        <input
+            type="password"
+            name="contrasena"
+            placeholder="Contraseña"
+            id="password"
+            required
+            minlength="8"
+            oninput="validarContrasena()">
+        <span class="toggle-password" id="togglePassword">
+            <i class="fas fa-eye"></i>
+        </span>
+    </div>
 
-<input 
-type="text"
-name="matricula"
-placeholder="Matrícula"
-required
-minlength="4"
-maxlength="12"
-inputmode="numeric"
-pattern="[0-9]*"
-oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-title="Solo números">
+    <!-- Reglas de contraseña visibles desde el inicio -->
+    <div class="password-rules">
+        <p>La contraseña debe tener:</p>
+        <div class="rule" id="rule-len"><i class="fas fa-circle"></i> Mínimo 8 caracteres</div>
+        <div class="rule" id="rule-upper"><i class="fas fa-circle"></i> Una mayúscula</div>
+        <div class="rule" id="rule-lower"><i class="fas fa-circle"></i> Una minúscula</div>
+        <div class="rule" id="rule-num"><i class="fas fa-circle"></i> Un número</div>
+        <div class="rule" id="rule-sym"><i class="fas fa-circle"></i> Un símbolo (!@#$...)</div>
+    </div>
+    <div class="field-error" id="err-password">La contraseña no cumple los requisitos.</div>
 
-</div>
+    <button type="submit" class="btn" id="btnRegistro">Registrarse</button>
 
-<!-- Nombre completo -->
-<div class="form-group">
-
-<i class="fas fa-user icon"></i>
-
-<input
-type="text"
-name="usuario"
-placeholder="Nombre completo"
-required
-minlength="5"
-maxlength="80">
-
-</div>
-
-<!-- Email -->
-<div class="form-group">
-
-<i class="fas fa-envelope icon"></i>
-
-<input
-type="email"
-name="email"
-placeholder="Correo institucional"
-required
-pattern=".+@virtual\.utsc\.edu\.mx"
-title="Debe ser correo institucional">
-
-</div>
-
-<!-- Contraseña -->
-<div class="form-group password-group">
-
-<i class="fas fa-lock icon"></i>
-
-<input
-type="password"
-name="contrasena"
-placeholder="Contraseña"
-id="password"
-required
-minlength="8"
-title="Debe tener mayúscula, minúscula, número y símbolo">
-
-<span class="toggle-password" id="togglePassword">
-<i class="fas fa-eye"></i>
-</span>
-
-</div>
-
-<button type="submit" class="btn">Registrarse</button>
-
-<div class="login-link">
-
-<p>
-¿Ya tienes cuenta?
-<a href="/login" class="login-text">Inicia sesión aquí</a>
-</p>
-
-</div>
+    <div class="login-link">
+        <p>
+            ¿Ya tienes cuenta?
+            <a href="/login" class="login-text">Inicia sesión aquí</a>
+        </p>
+    </div>
 
 </form>
 
 </div>
+
+<script>
+// ===== VALIDACIONES EN TIEMPO REAL =====
+
+function validarMatricula() {
+    const val = document.getElementById('matricula').value.trim();
+    const err = document.getElementById('err-matricula');
+    const ok  = val.length > 0 && /^[0-9]+$/.test(val);
+    err.classList.toggle('visible', !ok && val.length > 0);
+    return ok;
+}
+
+function validarNombre() {
+    // Permite letras con acentos, ñ, apóstrofe y espacios
+    const val = document.getElementById('usuario').value.trim();
+    const err = document.getElementById('err-usuario');
+    const ok  = val.length >= 5;
+    err.classList.toggle('visible', !ok && val.length > 0);
+    return ok;
+}
+
+function validarEmail() {
+    const val = document.getElementById('email').value.trim().toLowerCase();
+    const err = document.getElementById('err-email');
+    const ok  = val.endsWith('@virtual.utsc.edu.mx');
+    err.classList.toggle('visible', !ok && val.length > 0);
+    return ok;
+}
+
+function validarContrasena() {
+    const val = document.getElementById('password').value;
+    const err = document.getElementById('err-password');
+
+    const reglas = {
+        'rule-len'  : val.length >= 8,
+        'rule-upper': /[A-Z]/.test(val),
+        'rule-lower': /[a-z]/.test(val),
+        'rule-num'  : /[0-9]/.test(val),
+        'rule-sym'  : /[^a-zA-Z0-9\s]/.test(val)
+    };
+
+    let todas = true;
+    for (const [id, cumple] of Object.entries(reglas)) {
+        const el = document.getElementById(id);
+        el.classList.toggle('ok', cumple);
+        // Cambiar icono de circulo a check cuando se cumple
+        const icon = el.querySelector('i');
+        icon.className = cumple ? 'fas fa-check-circle' : 'fas fa-circle';
+        if (!cumple) todas = false;
+    }
+
+    err.classList.toggle('visible', !todas && val.length > 0);
+    return todas;
+}
+
+// Validar todo antes de enviar
+document.getElementById('formRegistro').addEventListener('submit', function(e) {
+    const m = validarMatricula();
+    const n = validarNombre();
+    const em = validarEmail();
+    const p = validarContrasena();
+    if (!m || !n || !em || !p) {
+        e.preventDefault();
+    }
+});
+
+// Toggle mostrar/ocultar contraseña
+document.addEventListener('DOMContentLoaded', function() {
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordField  = document.getElementById('password');
+    if (togglePassword && passwordField) {
+        togglePassword.addEventListener('click', function() {
+            const hidden = passwordField.type === 'password';
+            passwordField.type = hidden ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.classList.toggle('fa-eye',      !hidden);
+                icon.classList.toggle('fa-eye-slash', hidden);
+            }
+        });
+    }
+});
+</script>
 
 </body>
 </html>
