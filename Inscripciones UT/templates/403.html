@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso Denegado | UTSC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <style>
+        .error-container { text-align:center; padding: 60px 20px; }
+        .error-icon { font-size: 80px; color: #c62828; margin-bottom: 20px; }
+        .error-code { font-size: 6rem; font-weight: bold; color: var(--nl-green); margin: 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card error-container">
+        <div class="error-icon"><i class="fas fa-ban"></i></div>
+        <p class="error-code">403</p>
+        <h2>Acceso Denegado</h2>
+        <p style="color:#666;">No tienes permisos para acceder a esta página.</p>
+        <a href="/pagina_principal" class="btn-primary">
+            <i class="fas fa-home"></i> Volver al Inicio
+        </a>
+    </div>
+</div>
+</body>
+</html>

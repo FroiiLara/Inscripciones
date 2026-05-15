@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administrador | UTSC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <style>
+        .admin-tabs { display:flex; gap:10px; margin-bottom:25px; flex-wrap:wrap; }
+        .tab-btn {
+            padding: 10px 24px;
+            border: 2px solid var(--nl-green);
+            background: white;
+            color: var(--nl-green);
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+        .tab-btn.active, .tab-btn:hover {
+            background: var(--nl-green);
+            color: white;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tabla-admin {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .tabla-admin th {
+            background: var(--nl-green);
+            color: white;
+            padding: 10px 12px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        .tabla-admin td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            vertical-align: middle;
+        }
+        .tabla-admin tr:nth-child(even) td { background: #f8f9fa; }
+        .tabla-admin tr:hover td { background: #e8f5e9; }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .badge-revision  { background: #fff8e1; color: #f57f17; border: 1px solid #f57f17; }
+        .badge-aprobada  { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
+        .badge-rechazada { background: #ffebee; color: #c62828; border: 1px solid #c62828; }
+        .btn-aprobar {
+            background: #2e7d32; color: white; border: none;
+            padding: 5px 12px; border-radius: 4px; cursor: pointer;
+            font-size: 0.8rem; margin-right: 4px;
+        }
+        .btn-rechazar {
+            background: #c62828; color: white; border: none;
+            padding: 5px 12px; border-radius: 4px; cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .btn-aprobar:hover { background: #1b5e20; }
+        .btn-rechazar:hover { background: #8b0000; }
+        .doc-link {
+            color: var(--nl-green);
+            text-decoration: none;
+            font-size: 0.8rem;
+        }
+        .doc-link:hover { text-decoration: underline; }
+        .stats-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 120px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .stat-card .num { font-size: 2rem; font-weight: bold; color: var(--nl-green); }
+        .stat-card .lbl { font-size: 0.8rem; color: #666; }
+        .vacio { text-align: center; padding: 30px; color: #999; font-style: italic; }
+        .tag-materia {
+            display: inline-block;
+            background: var(--nl-green);
+            color: white;
+            font-size: 0.7rem;
+            padding: 1px 7px;
+            border-radius: 20px;
+            margin: 1px;
+        }
+        .header-admin {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .header-admin h2 { margin: 0; color: var(--nl-green); }
+        .badge-admin {
+            background: var(--nl-orange);
+            color: white;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <nav class="navbar">
+        <div class="navbar-left">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" class="nav-logo" alt="Gobierno NL">
+            <span class="navbar-title">Gobierno de Nuevo León</span>
+        </div>
+        <ul class="navbar-menu">
+            <li><a href="/pagina_principal">Inicio</a></li>
+            <li><a href="/admin" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> Admin</a></li>
+            <li class="dropdown">
+                <button class="dropbtn">{{ usuario[0].upper() }}</button>
+                <div class="dropdown-content">
+                    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+                    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+                </div>
+            </li>
+        </ul>
+    </nav>
+</header>
+
+<div class="container">
+    <div class="univ-header">
+        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}" alt="Logo Universidad" class="univ-logo">
+    </div>
+
+    <div class="card">
+        <div class="header-admin">
+            <h2><i class="fas fa-shield-alt"></i> Panel de Administrador</h2>
+            <span class="badge-admin">Control Escolar</span>
+        </div>
+
+        <!-- ESTADÍSTICAS -->
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="num">{{ inscripciones|length }}</div>
+                <div class="lbl">Inscripciones</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">{{ reinscripciones|length }}</div>
+                <div class="lbl">Reinscripciones</div>
+            </div>
+            <div class="stat-card">
+                <div class="num" style="color:#f57f17;">
+                    {{ inscripciones|selectattr('estatus','eq','En revisión')|list|length +
+                       reinscripciones|selectattr('estatus','eq','En revisión')|list|length }}
+                </div>
+                <div class="lbl">Pendientes</div>
+            </div>
+            <div class="stat-card">
+                <div class="num" style="color:#2e7d32;">
+                    {{ inscripciones|selectattr('estatus','eq','Aprobada')|list|length +
+                       reinscripciones|selectattr('estatus','eq','Aprobada')|list|length }}
+                </div>
+                <div class="lbl">Aprobadas</div>
+            </div>
+        </div>
+
+        <!-- TABS -->
+        <div class="admin-tabs">
+            <button class="tab-btn active" onclick="showTab('inscripciones')">
+                <i class="fas fa-file-alt"></i> Inscripciones ({{ inscripciones|length }})
+            </button>
+            <button class="tab-btn" onclick="showTab('reinscripciones')">
+                <i class="fas fa-redo"></i> Reinscripciones ({{ reinscripciones|length }})
+            </button>
+        </div>
+
+        <!-- TAB: INSCRIPCIONES -->
+        <div id="tab-inscripciones" class="tab-content active">
+            {% if inscripciones %}
+            <div style="overflow-x:auto;">
+                <table class="tabla-admin">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Nombre</th>
+                            <th>CURP</th>
+                            <th>Carrera</th>
+                            <th>Teléfono</th>
+                            <th>Fecha Nac.</th>
+                            <th>Documentos</th>
+                            <th>Fecha Solicitud</th>
+                            <th>Estatus</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ins in inscripciones %}
+                        <tr>
+                            <td><strong>{{ ins.folio }}</strong></td>
+                            <td>{{ ins.nombre }}</td>
+                            <td>{{ ins.curp }}</td>
+                            <td>{{ ins.carrera }}</td>
+                            <td>{{ ins.telefono }}</td>
+                            <td>{{ ins.fecha_nacimiento }}</td>
+                            <td>
+                                <a href="{{ ins.fotografia }}" target="_blank" class="doc-link"><i class="fas fa-image"></i> Foto</a><br>
+                                <a href="{{ ins.doc_acta }}"   target="_blank" class="doc-link"><i class="fas fa-file-pdf"></i> Acta</a><br>
+                                <a href="{{ ins.doc_cert }}"   target="_blank" class="doc-link"><i class="fas fa-file-pdf"></i> Cert.</a><br>
+                                <a href="{{ ins.comprobante }}" target="_blank" class="doc-link"><i class="fas fa-file-pdf"></i> Comprobante</a>
+                            </td>
+                            <td>{{ ins.get('fecha_solicitud', '—') }}</td>
+                            <td>
+                                {% if ins.estatus == 'Aprobada' %}
+                                    <span class="badge badge-aprobada"><i class="fas fa-check"></i> Aprobada</span>
+                                {% elif ins.estatus == 'Rechazada' %}
+                                    <span class="badge badge-rechazada"><i class="fas fa-times"></i> Rechazada</span>
+                                {% else %}
+                                    <span class="badge badge-revision"><i class="fas fa-clock"></i> En revisión</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if ins.estatus == 'En revisión' %}
+                                <form method="POST" action="/admin/actualizar_estatus" style="display:inline;">
+                                    <input type="hidden" name="folio" value="{{ ins.folio }}">
+                                    <input type="hidden" name="tipo" value="inscripcion">
+                                    <input type="hidden" name="estatus" value="Aprobada">
+                                    <button type="submit" class="btn-aprobar" onclick="return confirm('¿Aprobar esta inscripción?')">
+                                        <i class="fas fa-check"></i> Aprobar
+                                    </button>
+                                </form>
+                                <form method="POST" action="/admin/actualizar_estatus" style="display:inline;">
+                                    <input type="hidden" name="folio" value="{{ ins.folio }}">
+                                    <input type="hidden" name="tipo" value="inscripcion">
+                                    <input type="hidden" name="estatus" value="Rechazada">
+                                    <button type="submit" class="btn-rechazar" onclick="return confirm('¿Rechazar esta inscripción?')">
+                                        <i class="fas fa-times"></i> Rechazar
+                                    </button>
+                                </form>
+                                {% else %}
+                                <span style="color:#999;font-size:0.8rem;">Sin acciones</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="vacio"><i class="fas fa-inbox"></i> No hay inscripciones registradas.</p>
+            {% endif %}
+        </div>
+
+        <!-- TAB: REINSCRIPCIONES -->
+        <div id="tab-reinscripciones" class="tab-content">
+            {% if reinscripciones %}
+            <div style="overflow-x:auto;">
+                <table class="tabla-admin">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Matrícula</th>
+                            <th>Nombre</th>
+                            <th>Carrera</th>
+                            <th>Cuatrimestre</th>
+                            <th>Materias / Estadía</th>
+                            <th>Ref. Pago</th>
+                            <th>Comprobante</th>
+                            <th>Fecha Solicitud</th>
+                            <th>Estatus</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rei in reinscripciones %}
+                        <tr>
+                            <td><strong>{{ rei.folio }}</strong></td>
+                            <td>{{ rei.matricula }}</td>
+                            <td>{{ rei.nombre }}</td>
+                            <td>{{ rei.carrera }}</td>
+                            <td>{{ rei.cuatrimestre }}°</td>
+                            <td>
+                                {% if rei.es_estadia %}
+                                    <span class="badge" style="background:var(--nl-orange);color:white;">
+                                        <i class="fas fa-briefcase"></i> Estadía
+                                    </span>
+                                {% else %}
+                                    {% for m in rei.materias %}
+                                        <span class="tag-materia">{{ m }}</span>
+                                    {% endfor %}
+                                {% endif %}
+                            </td>
+                            <td>{{ rei.referencia_pago }}</td>
+                            <td>
+                                <a href="{{ rei.comprobante }}" target="_blank" class="doc-link">
+                                    <i class="fas fa-file-pdf"></i> Ver comprobante
+                                </a>
+                            </td>
+                            <td>{{ rei.get('fecha_solicitud', '—') }}</td>
+                            <td>
+                                {% if rei.estatus == 'Aprobada' %}
+                                    <span class="badge badge-aprobada"><i class="fas fa-check"></i> Aprobada</span>
+                                {% elif rei.estatus == 'Rechazada' %}
+                                    <span class="badge badge-rechazada"><i class="fas fa-times"></i> Rechazada</span>
+                                {% else %}
+                                    <span class="badge badge-revision"><i class="fas fa-clock"></i> En revisión</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if rei.estatus == 'En revisión' %}
+                                <form method="POST" action="/admin/actualizar_estatus" style="display:inline;">
+                                    <input type="hidden" name="folio" value="{{ rei.folio }}">
+                                    <input type="hidden" name="tipo" value="reinscripcion">
+                                    <input type="hidden" name="estatus" value="Aprobada">
+                                    <button type="submit" class="btn-aprobar" onclick="return confirm('¿Aprobar esta reinscripción?')">
+                                        <i class="fas fa-check"></i> Aprobar
+                                    </button>
+                                </form>
+                                <form method="POST" action="/admin/actualizar_estatus" style="display:inline;">
+                                    <input type="hidden" name="folio" value="{{ rei.folio }}">
+                                    <input type="hidden" name="tipo" value="reinscripcion">
+                                    <input type="hidden" name="estatus" value="Rechazada">
+                                    <button type="submit" class="btn-rechazar" onclick="return confirm('¿Rechazar esta reinscripción?')">
+                                        <i class="fas fa-times"></i> Rechazar
+                                    </button>
+                                </form>
+                                {% else %}
+                                <span style="color:#999;font-size:0.8rem;">Sin acciones</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="vacio"><i class="fas fa-inbox"></i> No hay reinscripciones registradas.</p>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+<footer class="main-footer">
+    <div class="footer-content">
+        <div class="footer-section">
+            <h4>Contacto</h4>
+            <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
+            <p><i class="fas fa-envelope"></i> utsc@utsc.edu.mx</p>
+        </div>
+        <div class="footer-section">
+            <h4>Gobierno de Nuevo León</h4>
+            <p>Secretaría de Educación</p>
+            <p>© 2026 - Todos los derechos reservados</p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function showTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    event.target.classList.add('active');
+}
+function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
+</script>
+</body>
+</html>

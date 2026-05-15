@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Historial | UTSC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <style>
+        .historial-section { margin-bottom: 40px; }
+        .historial-section h3 {
+            color: var(--nl-green);
+            border-bottom: 2px solid var(--nl-orange);
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+        }
+        .tabla-historial {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .tabla-historial th {
+            background: var(--nl-green);
+            color: white;
+            padding: 10px 14px;
+            text-align: left;
+        }
+        .tabla-historial td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .tabla-historial tr:nth-child(even) td { background: #f8f9fa; }
+        .tabla-historial tr:hover td { background: #e8f5e9; }
+        .badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: bold;
+        }
+        .badge-revision  { background: #fff8e1; color: #f57f17; border: 1px solid #f57f17; }
+        .badge-aprobada  { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
+        .badge-rechazada { background: #ffebee; color: #c62828; border: 1px solid #c62828; }
+        .vacio { text-align: center; padding: 30px; color: #999; font-style: italic; }
+        .tag-materia {
+            display: inline-block;
+            background: var(--nl-green);
+            color: white;
+            font-size: 0.72rem;
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <nav class="navbar">
+        <div class="navbar-left">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" class="nav-logo" alt="Gobierno NL">
+            <span class="navbar-title">Gobierno de Nuevo León</span>
+        </div>
+        <ul class="navbar-menu">
+            <li><a href="/pagina_principal">Inicio</a></li>
+            <li><a href="/inscripcion">Inscripción</a></li>
+            <li><a href="/reinscripcion">Reinscripción</a></li>
+            <li><a href="/soporte">Soporte</a></li>
+            <li class="dropdown">
+                <button class="dropbtn">{{ usuario[0].upper() }}</button>
+                <div class="dropdown-content">
+                    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+                    <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
+                    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+                </div>
+            </li>
+        </ul>
+        <button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
+    </nav>
+    <div class="mobile-menu" id="mobileMenu">
+        <a href="/pagina_principal">Inicio</a>
+        <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+        <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
+        <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+    </div>
+</header>
+
+<div class="container">
+    <div class="univ-header">
+        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}" alt="Logo Universidad" class="univ-logo">
+    </div>
+
+    <div class="card">
+        <h2 style="color:var(--nl-green);"><i class="fas fa-history"></i> Mi Historial de Solicitudes</h2>
+        <p style="color:#666;">Aquí puedes consultar todas tus inscripciones y reinscripciones realizadas.</p>
+
+        <!-- ===== INSCRIPCIONES ===== -->
+        <div class="historial-section">
+            <h3><i class="fas fa-file-alt"></i> Inscripciones</h3>
+            {% if inscripciones %}
+            <div style="overflow-x:auto;">
+                <table class="tabla-historial">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Nombre</th>
+                            <th>Carrera</th>
+                            <th>Fecha Solicitud</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ins in inscripciones %}
+                        <tr>
+                            <td><strong>{{ ins.folio }}</strong></td>
+                            <td>{{ ins.nombre }}</td>
+                            <td>{{ ins.carrera }}</td>
+                            <td>{{ ins.get('fecha_solicitud', '—') }}</td>
+                            <td>
+                                {% if ins.estatus == 'Aprobada' %}
+                                    <span class="badge badge-aprobada"><i class="fas fa-check"></i> Aprobada</span>
+                                {% elif ins.estatus == 'Rechazada' %}
+                                    <span class="badge badge-rechazada"><i class="fas fa-times"></i> Rechazada</span>
+                                {% else %}
+                                    <span class="badge badge-revision"><i class="fas fa-clock"></i> En revisión</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="vacio"><i class="fas fa-inbox"></i> No tienes inscripciones registradas.</p>
+            {% endif %}
+        </div>
+
+        <!-- ===== REINSCRIPCIONES ===== -->
+        <div class="historial-section">
+            <h3><i class="fas fa-redo"></i> Reinscripciones</h3>
+            {% if reinscripciones %}
+            <div style="overflow-x:auto;">
+                <table class="tabla-historial">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Nombre</th>
+                            <th>Carrera</th>
+                            <th>Cuatrimestre</th>
+                            <th>Materias / Estadía</th>
+                            <th>Fecha Solicitud</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rei in reinscripciones %}
+                        <tr>
+                            <td><strong>{{ rei.folio }}</strong></td>
+                            <td>{{ rei.nombre }}</td>
+                            <td>{{ rei.carrera }}</td>
+                            <td>{{ rei.cuatrimestre }}°</td>
+                            <td>
+                                {% if rei.es_estadia %}
+                                    <span class="badge" style="background:var(--nl-orange);color:white;">
+                                        <i class="fas fa-briefcase"></i> Estadía
+                                    </span>
+                                {% else %}
+                                    {% for m in rei.materias %}
+                                        <span class="tag-materia">{{ m }}</span>
+                                    {% endfor %}
+                                {% endif %}
+                            </td>
+                            <td>{{ rei.get('fecha_solicitud', '—') }}</td>
+                            <td>
+                                {% if rei.estatus == 'Aprobada' %}
+                                    <span class="badge badge-aprobada"><i class="fas fa-check"></i> Aprobada</span>
+                                {% elif rei.estatus == 'Rechazada' %}
+                                    <span class="badge badge-rechazada"><i class="fas fa-times"></i> Rechazada</span>
+                                {% else %}
+                                    <span class="badge badge-revision"><i class="fas fa-clock"></i> En revisión</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="vacio"><i class="fas fa-inbox"></i> No tienes reinscripciones registradas.</p>
+            {% endif %}
+        </div>
+
+        <div style="text-align:center;margin-top:20px;">
+            <a href="/pagina_principal" class="btn-primary">
+                <i class="fas fa-home"></i> Volver al Inicio
+            </a>
+        </div>
+    </div>
+</div>
+
+<footer class="main-footer">
+    <div class="footer-content">
+        <div class="footer-section">
+            <h4>Contacto</h4>
+            <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
+            <p><i class="fas fa-envelope"></i> utsc@utsc.edu.mx</p>
+        </div>
+        <div class="footer-section">
+            <h4>Gobierno de Nuevo León</h4>
+            <p>Secretaría de Educación</p>
+            <p>© 2026 - Todos los derechos reservados</p>
+        </div>
+    </div>
+</footer>
+<script>
+function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
+</script>
+</body>
+</html>
