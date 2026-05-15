@@ -1,0 +1,10 @@
+flask
+flask-bcrypt
+flask-jwt-extended
+pymongo
+python-dotenv
+sendgrid
+itsdangerous
+werkzeug
+cloudinary
+dnspython
