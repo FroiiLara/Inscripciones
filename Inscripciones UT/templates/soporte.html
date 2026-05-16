@@ -27,6 +27,9 @@
             <li><a href="{{ url_for('soporte') }}" class="active">Soporte</a></li>
 
             <!-- PERFIL -->
+            {% if es_admin %}
+            <li><a href="/admin" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> Panel Admin</a></li>
+            {% endif %}
             <li class="dropdown">
                 <button class="dropbtn">
                     {{ usuario[0].upper() if usuario else 'U' }}
@@ -35,6 +38,7 @@
                     <a href="{{ url_for('mi_perfil') }}">
                         <i class="fas fa-user"></i> Mi Perfil
                     </a>
+                    {% if not es_admin %}<a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>{% endif %}
                     <a href="{{ url_for('logout') }}">
                         <i class="fas fa-sign-out-alt"></i> Cerrar sesión
                     </a>
@@ -56,6 +60,11 @@
         <a href="{{ url_for('inscripcion') }}">Inscripción</a>
         <a href="{{ url_for('reinscripcion') }}">Reinscripción</a>
         <a href="{{ url_for('soporte') }}">Soporte</a>
+        {% if es_admin %}
+        <a href="/admin" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> Panel Admin</a>
+        {% else %}
+        <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
+        {% endif %}
         <a href="{{ url_for('mi_perfil') }}"><i class="fas fa-user"></i> Mi Perfil</a>
         <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
     </div>

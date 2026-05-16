@@ -23,10 +23,21 @@
             <li><a href="/pagina_principal" class="active">Inicio</a></li>
             <li><a href="/soporte">Soporte</a></li>
 
+            {% if es_admin %}
+            <li>
+                <a href="/admin" style="color:var(--nl-orange); font-weight:bold;">
+                    <i class="fas fa-shield-alt"></i> Panel Admin
+                </a>
+            </li>
+            {% endif %}
+
             <li class="dropdown">
                 <button class="dropbtn">{{ usuario[0].upper() }}</button>
                 <div class="dropdown-content">
                     <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+                    {% if not es_admin %}
+                    <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
+                    {% endif %}
                     <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
                 </div>
             </li>
@@ -41,6 +52,14 @@
 
     <div class="mobile-menu" id="mobileMenu">
         <a href="/pagina_principal">Inicio</a>
+        <a href="/soporte">Soporte</a>
+        {% if es_admin %}
+        <a href="/admin" style="color:var(--nl-orange);font-weight:bold;">
+            <i class="fas fa-shield-alt"></i> Panel Admin
+        </a>
+        {% else %}
+        <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
+        {% endif %}
         <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
         <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
     </div>
@@ -84,13 +103,13 @@
         <div class="footer-section">
             <h4>Contacto</h4>
             <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
-            <p><i class="fas fa-envelope"></i> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="63100c130c11170623161710004d0607164d0e1b">[email&#160;protected]</a></p>
+            <p><i class="fas fa-envelope"></i> utsc@utsc.edu.mx</p>
         </div>
 
         <div class="footer-section">
             <h4>Enlaces Rápidos</h4><br>
             <a href="/inscripcion">Nueva Inscripción</a><br>
-            <a href="/contacto">Ubicación de Planteles</a>
+            <a href="/soporte">Soporte</a>
         </div>
 
         <div class="footer-section">
@@ -102,4 +121,11 @@
     </div>
 </footer>
 
-<script dat
+<script>
+function toggleMenu() {
+    document.getElementById('mobileMenu').classList.toggle('active');
+}
+</script>
+
+</body>
+</html>
