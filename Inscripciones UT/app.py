@@ -1,5 +1,6 @@
 import os
 import re
+from urllib import response
 import uuid
 import json
 from datetime import timedelta, datetime
@@ -68,11 +69,12 @@ def set_security_headers(response):
     # 3. Política de seguridad de contenido — controla qué recursos puede cargar la página
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
-        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
-        "font-src 'self' https://cdnjs.cloudflare.com; "
-        "img-src 'self' data: https://res.cloudinary.com; "
-        "connect-src 'self';"
+        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://js.hcaptcha.com https://newassets.hcaptcha.com; "
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://newassets.hcaptcha.com; "
+        "font-src 'self' https://cdnjs.cloudflare.com https://newassets.hcaptcha.com; "
+        "img-src 'self' data: https://res.cloudinary.com https://newassets.hcaptcha.com; "
+        "frame-src https://newassets.hcaptcha.com; "
+        "connect-src 'self' https://hcaptcha.com https://newassets.hcaptcha.com;"
     )
 
     # 4. Controla qué información de referencia se envía en peticiones externas
