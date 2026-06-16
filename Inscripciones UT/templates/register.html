@@ -2,54 +2,49 @@
 <html lang="es">
 
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Registro de Usuario</title>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
-<style>
-    /* Caja de reglas de contraseña visible desde el inicio */
-    .password-rules {
-        background: #f8f9fa;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        padding: 10px 14px;
-        margin-top: 6px;
-        font-size: 0.82rem;
-        text-align: left;
-    }
-    .password-rules p {
-        margin: 0 0 5px;
-        font-weight: 600;
-        color: #555;
-    }
-    .rule {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: #999;
-        margin: 3px 0;
-        transition: color 0.2s;
-    }
-    .rule.ok {
-        color: #2e7d32;
-    }
-    .rule i {
-        font-size: 0.75rem;
-    }
-    /* Mensaje de error inline debajo del campo */
-    .field-error {
-        color: #c0392b;
-        font-size: 0.8rem;
-        margin-top: 4px;
-        display: none;
-        text-align: left;
-    }
-    .field-error.visible {
-        display: block;
-    }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Usuario</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+
+    <!-- hCaptcha API -->
+    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+
+    <style>
+        .password-rules {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-top: 6px;
+            font-size: 0.82rem;
+            text-align: left;
+        }
+        .password-rules p { margin: 0 0 5px; font-weight: 600; color: #555; }
+        .rule { display: flex; align-items: center; gap: 6px; color: #999; margin: 3px 0; transition: color 0.2s; }
+        .rule.ok { color: #2e7d32; }
+        .rule i { font-size: 0.75rem; }
+        .field-error { color: #c0392b; font-size: 0.8rem; margin-top: 4px; display: none; text-align: left; }
+        .field-error.visible { display: block; }
+
+        /* Indicador de verificación CURP */
+        #curp-status {
+            font-size: 0.82rem;
+            margin-top: 4px;
+            margin-bottom: 8px;
+            min-height: 20px;
+            text-align: left;
+        }
+
+        /* hCaptcha centrado */
+        .h-captcha {
+            display: flex;
+            justify-content: center;
+            margin: 12px 0;
+        }
+    </style>
 </head>
 
 <body>
@@ -90,13 +85,13 @@
     </div>
     <div class="field-error" id="err-matricula">La matrícula debe contener solo números.</div>
 
-    <!-- Nombre completo — acepta ñ, acentos y apóstrofe -->
+    <!-- Nombre completo -->
     <div class="form-group">
         <i class="fas fa-user icon"></i>
         <input
             type="text"
             name="usuario"
-            id="usuario"
+            id="nombre"
             placeholder="Nombre completo"
             value="{{ request.form.get('usuario', '') }}"
             required
@@ -136,7 +131,7 @@
         </span>
     </div>
 
-    <!-- Reglas de contraseña visibles desde el inicio -->
+    <!-- Reglas de contraseña -->
     <div class="password-rules">
         <p>La contraseña debe tener:</p>
         <div class="rule" id="rule-len"><i class="fas fa-circle"></i> Mínimo 8 caracteres</div>
@@ -146,6 +141,12 @@
         <div class="rule" id="rule-sym"><i class="fas fa-circle"></i> Un símbolo (!@#$...)</div>
     </div>
     <div class="field-error" id="err-password">La contraseña no cumple los requisitos.</div>
+
+    <!-- hCaptcha widget — protección contra bots -->
+    <div class="h-captcha"
+         data-sitekey="{{ hcaptcha_sitekey }}"
+         data-theme="light">
+    </div>
 
     <button type="submit" class="btn" id="btnRegistro">Registrarse</button>
 
@@ -172,8 +173,7 @@ function validarMatricula() {
 }
 
 function validarNombre() {
-    // Permite letras con acentos, ñ, apóstrofe y espacios
-    const val = document.getElementById('usuario').value.trim();
+    const val = document.getElementById('nombre').value.trim();
     const err = document.getElementById('err-usuario');
     const ok  = val.length >= 5;
     err.classList.toggle('visible', !ok && val.length > 0);
@@ -191,7 +191,6 @@ function validarEmail() {
 function validarContrasena() {
     const val = document.getElementById('password').value;
     const err = document.getElementById('err-password');
-
     const reglas = {
         'rule-len'  : val.length >= 8,
         'rule-upper': /[A-Z]/.test(val),
@@ -199,48 +198,88 @@ function validarContrasena() {
         'rule-num'  : /[0-9]/.test(val),
         'rule-sym'  : /[^a-zA-Z0-9\s]/.test(val)
     };
-
     let todas = true;
     for (const [id, cumple] of Object.entries(reglas)) {
-        const el = document.getElementById(id);
-        el.classList.toggle('ok', cumple);
-        // Cambiar icono de circulo a check cuando se cumple
+        const el   = document.getElementById(id);
         const icon = el.querySelector('i');
+        el.classList.toggle('ok', cumple);
         icon.className = cumple ? 'fas fa-check-circle' : 'fas fa-circle';
         if (!cumple) todas = false;
     }
-
     err.classList.toggle('visible', !todas && val.length > 0);
     return todas;
 }
 
 // Validar todo antes de enviar
 document.getElementById('formRegistro').addEventListener('submit', function(e) {
-    const m = validarMatricula();
-    const n = validarNombre();
+    const m  = validarMatricula();
+    const n  = validarNombre();
     const em = validarEmail();
-    const p = validarContrasena();
+    const p  = validarContrasena();
     if (!m || !n || !em || !p) {
         e.preventDefault();
     }
 });
 
 // Toggle mostrar/ocultar contraseña
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const togglePassword = document.getElementById('togglePassword');
     const passwordField  = document.getElementById('password');
     if (togglePassword && passwordField) {
-        togglePassword.addEventListener('click', function() {
+        togglePassword.addEventListener('click', function () {
             const hidden = passwordField.type === 'password';
             passwordField.type = hidden ? 'text' : 'password';
             const icon = this.querySelector('i');
             if (icon) {
-                icon.classList.toggle('fa-eye',      !hidden);
-                icon.classList.toggle('fa-eye-slash', hidden);
+                icon.classList.toggle('fa-eye',       !hidden);
+                icon.classList.toggle('fa-eye-slash',  hidden);
             }
         });
     }
 });
+
+// ===== VALIDACIÓN CURP EN TIEMPO REAL (API RENAPO) =====
+// Nota: Esta sección aplica si agregas un campo CURP en el formulario de inscripción.
+// El register.html no tiene CURP — la validación se hace en inscripcion.html.
+// Aquí se incluye la función por si decides añadir el campo CURP en el registro.
+
+async function validarCURPenAPI(curp, indicador) {
+    try {
+        const resp = await fetch(`/api/validar_curp/${curp}`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await resp.json();
+
+        if (data.valida === true) {
+            indicador.innerHTML = `
+                <span style="color:#27ae60;">
+                    <i class="fas fa-check-circle"></i> CURP válida — ${data.nombre} ${data.paterno} ${data.materno}
+                </span>`;
+            // Autocompletar nombre si está vacío
+            const campoNombre = document.getElementById('nombre');
+            if (campoNombre && !campoNombre.value.trim()) {
+                campoNombre.value = `${data.nombre} ${data.paterno} ${data.materno}`.trim();
+                campoNombre.style.background = '#e8f5e9';
+            }
+        } else if (data.valida === false) {
+            indicador.innerHTML = `
+                <span style="color:#c0392b;">
+                    <i class="fas fa-times-circle"></i> ${data.mensaje}
+                </span>`;
+        } else {
+            indicador.innerHTML = `
+                <span style="color:#f39c12;">
+                    <i class="fas fa-exclamation-triangle"></i> ${data.mensaje}
+                </span>`;
+        }
+    } catch (err) {
+        indicador.innerHTML = `
+            <span style="color:#999;">
+                <i class="fas fa-exclamation-circle"></i> No se pudo verificar la CURP.
+            </span>`;
+    }
+}
 </script>
 
 </body>

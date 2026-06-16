@@ -97,6 +97,90 @@ def security_txt():
     )
     return contenido, 200, {'Content-Type': 'text/plain'}
 
+# ======================================================
+# API 1 — VALIDACIÓN CURP (RENAPO via consultacurp.com.mx)
+# ======================================================
+
+@app.route('/api/validar_curp/<curp>', methods=['GET'])
+@jwt_required()
+def api_validar_curp(curp):
+    """Valida que una CURP exista en el registro nacional (RENAPO)."""
+    import urllib.request
+
+    curp = curp.strip().upper()
+
+    # Primero validar formato antes de consultar API externa
+    curp_regex = re.compile(r'^[A-Z]{4}\d{6}[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{2}$')
+    if not curp_regex.match(curp):
+        return {'valida': False, 'mensaje': 'Formato de CURP incorrecto.'}, 400
+
+    try:
+        url = f"https://api.consultacurp.com.mx/curp/{curp}"
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'UTSC-Inscripciones/1.0'}
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+
+        if data.get('registros') and len(data['registros']) > 0:
+            registro = data['registros'][0]
+            return {
+                'valida'    : True,
+                'nombre'    : registro.get('nombres', ''),
+                'paterno'   : registro.get('primerApellido', ''),
+                'materno'   : registro.get('segundoApellido', ''),
+                'sexo'      : registro.get('sexo', ''),
+                'nacimiento': registro.get('fechaNacimiento', ''),
+                'estado'    : registro.get('claveEntidadRegistro', ''),
+                'mensaje'   : 'CURP válida y encontrada en RENAPO.'
+            }, 200
+        else:
+            return {'valida': False, 'mensaje': 'CURP no encontrada en RENAPO.'}, 404
+
+    except Exception as e:
+        print(f"Error consultando CURP API: {e}")
+        return {'valida': None, 'mensaje': 'No fue posible verificar la CURP en este momento.'}, 503
+
+
+# ======================================================
+# API 2 — HCAPTCHA — verificación servidor
+# ======================================================
+
+HCAPTCHA_SECRET  = os.environ.get('HCAPTCHA_SECRET_KEY', '')
+HCAPTCHA_SITEKEY = os.environ.get('HCAPTCHA_SITE_KEY', '')
+print(f"DEBUG HCAPTCHA_SITE_KEY: '{HCAPTCHA_SITEKEY}'")
+
+def verificar_hcaptcha(token):
+    """Verifica el token hCaptcha con el servidor de hCaptcha."""
+    import urllib.request
+    import urllib.parse
+
+    if not token or not HCAPTCHA_SECRET:
+        return False
+    try:
+        data = urllib.parse.urlencode({
+            'secret'  : HCAPTCHA_SECRET,
+            'response': token
+        }).encode()
+        req = urllib.request.Request(
+            'https://hcaptcha.com/siteverify',
+            data=data, method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            resultado = json.loads(resp.read().decode())
+        return resultado.get('success', False)
+    except Exception as e:
+        print(f"Error verificando hCaptcha: {e}")
+        return False
+
+
+# ======================================================
+# API 3 — GEOAPIFY — clave de entorno
+# ======================================================
+
+GEOAPIFY_KEY = os.environ.get('GEOAPIFY_API_KEY', '')
+
 # ================= MONGODB =================
 MONGO_URI = os.environ.get("MONGO_URI")
 client    = MongoClient(MONGO_URI)
@@ -320,6 +404,12 @@ def home():
 def registro():
     if request.method == 'POST':
 
+        # ── hCaptcha verification ──
+        hcaptcha_token = request.form.get('h-captcha-response', '')
+        if HCAPTCHA_SECRET and not verificar_hcaptcha(hcaptcha_token):
+            flash("Por favor completa el captcha de seguridad.", "error")
+            return redirect(url_for('registro'))
+
         matricula  = str(request.form.get('matricula', '')).strip()
         usuario    = str(request.form.get('usuario', '')).strip()
         email      = str(request.form.get('email', '')).lower().strip()
@@ -368,13 +458,19 @@ def registro():
         flash("Registro exitoso. Inicia sesión.", "success")
         return redirect(url_for('login'))
 
-    return render_template('register.html')
+    return render_template('register.html', hcaptcha_sitekey=HCAPTCHA_SITEKEY)
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
 
     if request.method == 'POST':
+
+        # ── hCaptcha verification ──
+        hcaptcha_token = request.form.get('h-captcha-response', '')
+        if HCAPTCHA_SECRET and not verificar_hcaptcha(hcaptcha_token):
+            flash("Por favor completa el captcha de seguridad.", "error")
+            return render_template('login.html', hcaptcha_sitekey=HCAPTCHA_SITEKEY)
 
         matricula  = str(request.form.get('matricula', '')).strip()
         contrasena = str(request.form.get('contrasena', ''))
@@ -386,13 +482,13 @@ def login():
 
         if not user:
             flash("Matrícula o contraseña incorrectos.", "error")
-            return render_template('login.html', matricula_guardada=matricula)
+            return render_template('login.html', matricula_guardada=matricula, hcaptcha_sitekey=HCAPTCHA_SITEKEY)
 
         bloqueado_hasta = user.get('bloqueado_hasta')
         if bloqueado_hasta and datetime.utcnow() < bloqueado_hasta:
             minutos_restantes = int((bloqueado_hasta - datetime.utcnow()).total_seconds() / 60)
             flash(f"Cuenta bloqueada temporalmente. Intente nuevamente en {minutos_restantes} minutos.", "error")
-            return render_template('login.html', matricula_guardada=matricula)
+            return render_template('login.html', matricula_guardada=matricula, hcaptcha_sitekey=HCAPTCHA_SITEKEY)
 
         if bcrypt.check_password_hash(user['contrasena'], contrasena):
 
@@ -423,9 +519,9 @@ def login():
             )
             flash(f"Contraseña incorrecta. Te quedan {restantes} intentos.", "error")
 
-        return render_template('login.html', matricula_guardada=matricula)
+        return render_template('login.html', matricula_guardada=matricula, hcaptcha_sitekey=HCAPTCHA_SITEKEY)
 
-    return render_template('login.html')
+    return render_template('login.html', hcaptcha_sitekey=HCAPTCHA_SITEKEY)
 
 
 @app.route('/logout')
@@ -488,7 +584,7 @@ def soporte():
     matricula = get_jwt_identity()
     user = collection.find_one({"matricula": matricula})
     nombre_usuario = user["usuario"] if user else matricula
-    return render_template('soporte.html', usuario=nombre_usuario)
+    return render_template('soporte.html', usuario=nombre_usuario, geoapify_key=GEOAPIFY_KEY)
 
 # ======================================================
 # HISTORIAL DEL ALUMNO  ← NUEVO

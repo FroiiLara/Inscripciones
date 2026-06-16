@@ -9,6 +9,18 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
     <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+
+    <!-- hCaptcha API -->
+    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+
+    <style>
+        /* hCaptcha centrado dentro del formulario */
+        .h-captcha {
+            display: flex;
+            justify-content: center;
+            margin: 12px 0;
+        }
+    </style>
 </head>
 
 <body>
@@ -36,7 +48,6 @@
             <!-- Matrícula -->
             <div class="form-group">
                 <i class="fas fa-id-badge icon"></i>
-
                 <input
                     type="text"
                     name="matricula"
@@ -52,17 +63,21 @@
             <!-- Contraseña -->
             <div class="form-group password-group">
                 <i class="fas fa-lock icon"></i>
-
                 <input
                     type="password"
                     name="contrasena"
                     id="password"
                     placeholder="Contraseña"
                     required>
-
                 <span class="toggle-password" id="togglePassword">
                     <i class="fas fa-eye"></i>
                 </span>
+            </div>
+
+            <!-- hCaptcha widget — protección contra bots -->
+            <div class="h-captcha"
+                 data-sitekey="{{ hcaptcha_sitekey }}"
+                 data-theme="light">
             </div>
 
             <!-- Botón -->
@@ -89,5 +104,23 @@
 
         </form>
     </div>
+
+    <script>
+        // Toggle mostrar/ocultar contraseña
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordField  = document.getElementById('password');
+        if (togglePassword && passwordField) {
+            togglePassword.addEventListener('click', function () {
+                const hidden = passwordField.type === 'password';
+                passwordField.type = hidden ? 'text' : 'password';
+                const icon = this.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-eye',       !hidden);
+                    icon.classList.toggle('fa-eye-slash',  hidden);
+                }
+            });
+        }
+    </script>
+
 </body>
 </html>

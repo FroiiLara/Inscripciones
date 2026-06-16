@@ -3,144 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Soporte | Sistema Escolar Nuevo León</title>
+    <title>Soporte | UTSC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/soporte.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <style>
+        .soporte-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:20px; }
+        @media(max-width:768px){ .soporte-grid{ grid-template-columns:1fr; } }
+        .info-card { background:white; border-radius:10px; padding:24px; box-shadow:0 2px 8px rgba(0,0,0,0.08); border-left:4px solid var(--nl-green); }
+        .info-card h3 { color:var(--nl-green); margin-bottom:16px; font-size:1.1rem; }
+        .info-item { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; font-size:0.95rem; color:#444; }
+        .info-item i { color:var(--nl-orange); width:20px; margin-top:2px; flex-shrink:0; }
+        #mapa-utsc { width:100%; height:320px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); border:1px solid #e0e0e0; }
+        .mapa-card { background:white; border-radius:10px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.08); border-left:4px solid var(--nl-orange); }
+        .mapa-card h3 { color:var(--nl-green); margin-bottom:14px; font-size:1.1rem; }
+        .horario-tabla { width:100%; border-collapse:collapse; font-size:0.9rem; }
+        .horario-tabla td { padding:6px 8px; border-bottom:1px solid #f0f0f0; }
+        .horario-tabla td:first-child { font-weight:600; color:var(--nl-green); }
+        .loader-mapa { text-align:center; padding:20px; color:#999; font-size:0.9rem; }
+        .mapa-footer { margin-top:8px; font-size:0.78rem; color:#999; text-align:right; }
+    </style>
 </head>
-
 <body>
-
-<!-- ================= NAVBAR ================= -->
 <header>
     <nav class="navbar">
         <div class="navbar-left">
             <img src="{{ url_for('static', filename='img/logo.png') }}" class="nav-logo" alt="Gobierno NL">
             <span class="navbar-title">Gobierno de Nuevo León</span>
         </div>
-
         <ul class="navbar-menu">
-            <li><a href="{{ url_for('pagina_principal') }}">Inicio</a></li>
-            <li><a href="{{ url_for('inscripcion') }}">Inscripción</a></li>
-            <li><a href="{{ url_for('reinscripcion') }}">Reinscripción</a></li>
-            <li><a href="{{ url_for('soporte') }}" class="active">Soporte</a></li>
-
-            <!-- PERFIL -->
+            <li><a href="/pagina_principal">Inicio</a></li>
+            <li><a href="/inscripcion">Inscripción</a></li>
+            <li><a href="/reinscripcion">Reinscripción</a></li>
+            <li><a href="/soporte" class="active">Soporte</a></li>
             {% if es_admin %}
             <li><a href="/admin" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> Panel Admin</a></li>
             {% endif %}
             <li class="dropdown">
-                <button class="dropbtn">
-                    {{ usuario[0].upper() if usuario else 'U' }}
-                </button>
+                <button class="dropbtn">{{ usuario[0].upper() }}</button>
                 <div class="dropdown-content">
-                    <a href="{{ url_for('mi_perfil') }}">
-                        <i class="fas fa-user"></i> Mi Perfil
-                    </a>
-                    {% if not es_admin %}<a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>{% endif %}
-                    <a href="{{ url_for('logout') }}">
-                        <i class="fas fa-sign-out-alt"></i> Cerrar sesión
-                    </a>
+                    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+                    {% if not es_admin %}
+                    <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
+                    {% endif %}
+                    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
                 </div>
             </li>
         </ul>
-
-        <!-- BOTÓN HAMBURGUESA -->
-        <button class="hamburger" onclick="toggleMenu()">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
+        <button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
     </nav>
-
-    <!-- MENÚ MÓVIL -->
     <div class="mobile-menu" id="mobileMenu">
-        <a href="{{ url_for('pagina_principal') }}">Inicio</a>
-        <a href="{{ url_for('inscripcion') }}">Inscripción</a>
-        <a href="{{ url_for('reinscripcion') }}">Reinscripción</a>
-        <a href="{{ url_for('soporte') }}">Soporte</a>
-        {% if es_admin %}
-        <a href="/admin" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> Panel Admin</a>
-        {% else %}
-        <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
-        {% endif %}
-        <a href="{{ url_for('mi_perfil') }}"><i class="fas fa-user"></i> Mi Perfil</a>
-        <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+        <a href="/pagina_principal">Inicio</a>
+        {% if es_admin %}<a href="/admin" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> Panel Admin</a>
+        {% else %}<a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>{% endif %}
+        <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+        <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
     </div>
 </header>
-<!-- =============== FIN NAVBAR =============== -->
 
-<!-- ================= CONTENIDO ================= -->
-<main class="container">
-
+<div class="container">
     <div class="univ-header">
-        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}"
-             alt="Logo Universidad"
-             class="univ-logo">
+        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}" alt="Logo Universidad" class="univ-logo">
     </div>
-
-    <section class="card">
-        <h2>Soporte Técnico y Ubicación</h2>
-
-        <div class="info">
-            <p><strong>📍 Ubicación:</strong><br>
-                Carr. Monterrey - Saltillo Km. 61.5, Bosques de Santa Catarina,
-                66359 Cdad. Santa Catarina, N.L.
-            </p>
-
-            <p><strong>📞 Teléfono:</strong><br>
-                +52 81 8124 8400
-            </p>
-
-            <p><strong>🌐 Página oficial:</strong><br>
-                <a href="https://utsc.edu.mx/" target="_blank">
-                    https://utsc.edu.mx/
-                </a>
-            </p>
-
-            <hr>
-
-            <h4>Horario de Atención</h4>
-            <p>Lunes a Viernes<br>8:30 AM – 5:30 PM</p>
+    <div class="card">
+        <h2 style="color:var(--nl-green);"><i class="fas fa-headset"></i> Soporte y Contacto</h2>
+        <p style="color:#666;">Encuentra toda la información de contacto y cómo llegar a la UTSC.</p>
+        <div class="soporte-grid">
+            <div class="info-card">
+                <h3><i class="fas fa-address-card"></i> Información de Contacto</h3>
+                <div class="info-item"><i class="fas fa-map-marker-alt"></i><span>Carretera Monterrey-Saltillo Km. 61.5, C.P. 66359, Santa Catarina, Nuevo León</span></div>
+                <div class="info-item"><i class="fas fa-phone"></i><span>(81) 81-24-84-00</span></div>
+                <div class="info-item"><i class="fas fa-envelope"></i><span>utsc@utsc.edu.mx</span></div>
+                <div class="info-item"><i class="fas fa-globe"></i><a href="https://www.utsc.edu.mx" target="_blank" style="color:var(--nl-green);">www.utsc.edu.mx</a></div>
+                <hr style="border:none;border-top:1px solid #eee;margin:16px 0;">
+                <h3><i class="fas fa-clock"></i> Horarios de Atención</h3>
+                <table class="horario-tabla">
+                    <tr><td>Lunes – Viernes</td><td>8:00 AM – 6:00 PM</td></tr>
+                    <tr><td>Sábado</td><td>9:00 AM – 1:00 PM</td></tr>
+                    <tr><td>Domingo</td><td>Cerrado</td></tr>
+                </table>
+                <hr style="border:none;border-top:1px solid #eee;margin:16px 0;">
+                <h3><i class="fas fa-building"></i> Control Escolar</h3>
+                <div class="info-item"><i class="fas fa-user-tie"></i><span>Dudas sobre inscripciones, reinscripciones y estatus de solicitudes</span></div>
+                <div class="info-item"><i class="fas fa-envelope"></i><span>control.escolar@utsc.edu.mx</span></div>
+            </div>
+            <div class="mapa-card">
+                <h3><i class="fas fa-map-marked-alt"></i> Ubicación UTSC</h3>
+                <div class="loader-mapa" id="loader-mapa"><i class="fas fa-circle-notch fa-spin"></i> Cargando mapa...</div>
+                <div id="mapa-utsc" style="display:none;"></div>
+                <div class="mapa-footer">© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> | Tiles: <a href="https://www.geoapify.com/" target="_blank">Geoapify</a></div>
+                <div style="margin-top:12px;">
+                    <a href="https://maps.google.com/?q=Universidad+Tecnologica+Santa+Catarina+Nuevo+Leon" target="_blank"
+                       style="display:inline-flex;align-items:center;gap:8px;background:var(--nl-green);color:white;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:0.88rem;">
+                        <i class="fas fa-directions"></i> Cómo llegar (Google Maps)
+                    </a>
+                </div>
+            </div>
         </div>
-    </section>
+    </div>
+</div>
 
-</main>
-<!-- ================= FIN CONTENIDO ================= -->
-
-<!-- ================= FOOTER ================= -->
 <footer class="main-footer">
     <div class="footer-content">
-
         <div class="footer-section">
             <h4>Contacto</h4>
             <p><i class="fas fa-phone"></i> +52 81 8124 8400</p>
-            <p><i class="fas fa-envelope"></i> soporte@utsc.edu.mx</p>
+            <p><i class="fas fa-envelope"></i> utsc@utsc.edu.mx</p>
         </div>
-
-        <div class="footer-section">
-            <h4>Enlaces Rápidos</h4><br>
-            <a href="{{ url_for('inscripcion') }}">Nueva Inscripción</a><br>
-            <a href="{{ url_for('reinscripcion') }}">Reinscripción</a>
-        </div>
-
         <div class="footer-section">
             <h4>Gobierno de Nuevo León</h4>
             <p>Secretaría de Educación</p>
             <p>© 2026 - Todos los derechos reservados</p>
         </div>
-
     </div>
 </footer>
-<!-- ================= FIN FOOTER ================= -->
 
-<!-- ================= JS ================= -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-function toggleMenu() {
-    document.getElementById('mobileMenu').classList.toggle('active');
-}
-</script>
+const UTSC_LAT = 25.6726;
+const UTSC_LNG = -100.4581;
+const GEOAPIFY_KEY = "{{ geoapify_key }}";
 
+function initMapa() {
+    document.getElementById('loader-mapa').style.display = 'none';
+    document.getElementById('mapa-utsc').style.display   = 'block';
+
+    const map = L.map('mapa-utsc', {
+        center: [UTSC_LAT, UTSC_LNG],
+        zoom: 15,
+        scrollWheelZoom: false
+    });
+
+    if (GEOAPIFY_KEY && GEOAPIFY_KEY !== '') {
+        L.tileLayer(
+            `https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_KEY}`,
+            { attribution: '© OpenStreetMap | © Geoapify', maxZoom: 20 }
+        ).addTo(map);
+    } else {
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19
+        }).addTo(map);
+    }
+
+    const iconoUTSC = L.divIcon({
+        html: '<div style="background:#1a5f5c;color:white;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);">🎓</div>',
+        className: '', iconSize:[38,38], iconAnchor:[19,38], popupAnchor:[0,-40]
+    });
+
+    L.marker([UTSC_LAT, UTSC_LNG], { icon: iconoUTSC })
+        .addTo(map)
+        .bindPopup('<div style="text-align:center;min-width:180px;"><strong style="color:#1a5f5c;">Universidad Tecnológica<br>de Santa Catarina</strong><br><small style="color:#666;">Carretera Mty-Saltillo Km. 61.5</small><br><small style="color:#666;">Santa Catarina, N.L.</small></div>', { maxWidth:220 })
+        .openPopup();
+}
+
+window.addEventListener('load', initMapa);
+function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
+</script>
 </body>
 </html>
