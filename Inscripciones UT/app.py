@@ -53,6 +53,50 @@ app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 
 jwt = JWTManager(app)
 
+# ======================================================
+# SECURITY HEADERS — Correcciones del escáner de vulnerabilidades
+# ======================================================
+
+@app.after_request
+def set_security_headers(response):
+    # 1. Previene que el navegador adivine el tipo de contenido (anti-XSS)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # 2. Fuerza HTTPS por 1 año e incluye subdominios (HSTS)
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+
+    # 3. Política de seguridad de contenido — controla qué recursos puede cargar la página
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: https://res.cloudinary.com; "
+        "connect-src 'self';"
+    )
+
+    # 4. Controla qué información de referencia se envía en peticiones externas
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    # 5. Previene que la página sea embebida en iframes (anti-clickjacking)
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+
+    # 6. Bloquear método OPTIONS — solo exponer métodos necesarios
+    if request.method == 'OPTIONS':
+        response.headers['Allow'] = 'GET, POST, HEAD'
+
+    return response
+
+
+@app.route('/.well-known/security.txt')
+def security_txt():
+    contenido = (
+        "Contact: mailto:utsc@utsc.edu.mx\n"
+        "Expires: 2027-01-01T00:00:00.000Z\n"
+        "Preferred-Languages: es, en\n"
+    )
+    return contenido, 200, {'Content-Type': 'text/plain'}
+
 # ================= MONGODB =================
 MONGO_URI = os.environ.get("MONGO_URI")
 client    = MongoClient(MONGO_URI)
