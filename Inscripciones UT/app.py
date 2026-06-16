@@ -1,6 +1,5 @@
 import os
 import re
-from urllib import response
 import uuid
 import json
 from datetime import timedelta, datetime
@@ -66,15 +65,31 @@ def set_security_headers(response):
     # 2. Fuerza HTTPS por 1 año e incluye subdominios (HSTS)
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
 
-    # 3. Política de seguridad de contenido — controla qué recursos puede cargar la página
+    # 3. Política de seguridad de contenido — actualizada para resolver hallazgos del escáner
+    #    base-uri 'self'   → previene inyección de etiquetas <base> maliciosas
+    #    object-src 'none' → bloquea plugins Flash/Java obsoletos
+    #    Dominios hCaptcha y Cloudinary incluidos explícitamente
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://js.hcaptcha.com https://newassets.hcaptcha.com; "
-        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://newassets.hcaptcha.com; "
-        "font-src 'self' https://cdnjs.cloudflare.com https://newassets.hcaptcha.com; "
-        "img-src 'self' data: https://res.cloudinary.com https://newassets.hcaptcha.com; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "script-src 'self' 'unsafe-inline' "
+        "https://cdnjs.cloudflare.com "
+        "https://js.hcaptcha.com "
+        "https://newassets.hcaptcha.com; "
+        "style-src 'self' 'unsafe-inline' "
+        "https://cdnjs.cloudflare.com "
+        "https://newassets.hcaptcha.com; "
+        "font-src 'self' "
+        "https://cdnjs.cloudflare.com "
+        "https://newassets.hcaptcha.com; "
+        "img-src 'self' data: "
+        "https://res.cloudinary.com "
+        "https://newassets.hcaptcha.com; "
         "frame-src https://newassets.hcaptcha.com; "
-        "connect-src 'self' https://hcaptcha.com https://newassets.hcaptcha.com;"
+        "connect-src 'self' "
+        "https://hcaptcha.com "
+        "https://newassets.hcaptcha.com;"
     )
 
     # 4. Controla qué información de referencia se envía en peticiones externas
@@ -83,8 +98,10 @@ def set_security_headers(response):
     # 5. Previene que la página sea embebida en iframes (anti-clickjacking)
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
 
-    # 6. Bloquear método OPTIONS — solo exponer métodos necesarios
+    # 6. Bloquear método OPTIONS — retorna 405 en lugar de 200
+    #    Evita revelar métodos disponibles del servidor al escáner
     if request.method == 'OPTIONS':
+        response.status_code = 405
         response.headers['Allow'] = 'GET, POST, HEAD'
 
     return response
@@ -491,13 +508,13 @@ def login():
 
         if not user:
             flash("Matrícula o contraseña incorrectos.", "error")
-            return render_template('login.html', matricula_guardada=matricula, hcaptcha_sitekey=HCAPTCHA_SITEKEY)
+            return render_template('login.html', matricula_guardada=matricula)
 
         bloqueado_hasta = user.get('bloqueado_hasta')
         if bloqueado_hasta and datetime.utcnow() < bloqueado_hasta:
             minutos_restantes = int((bloqueado_hasta - datetime.utcnow()).total_seconds() / 60)
             flash(f"Cuenta bloqueada temporalmente. Intente nuevamente en {minutos_restantes} minutos.", "error")
-            return render_template('login.html', matricula_guardada=matricula, hcaptcha_sitekey=HCAPTCHA_SITEKEY)
+            return render_template('login.html', matricula_guardada=matricula)
 
         if bcrypt.check_password_hash(user['contrasena'], contrasena):
 
