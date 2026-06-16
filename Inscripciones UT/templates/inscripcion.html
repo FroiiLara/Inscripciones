@@ -138,6 +138,8 @@
                     <div id="err-curp" style="color:#c0392b; font-size:0.8rem; margin-top:4px; display:none;">
                         CURP inválida. Formato: 4 letras, 6 números (AAMMDD), letra sexo, 2 letras estado, 3 consonantes, 2 alfanuméricos.
                     </div>
+                    <!-- Indicador validación CURP en RENAPO -->
+                    <div id="curp-status" style="font-size:0.82rem; margin-top:4px; min-height:20px;"></div>
                 </div>
                 <div class="form-group">
                     <label>Fecha de Nacimiento <span style="color:red">*</span></label>
@@ -346,8 +348,8 @@ document.getElementById('fotografia').addEventListener('change', function () {
 function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
 
 // ===== VALIDACIÓN DE CURP =====
-// Formato oficial: 4 letras | 6 dígitos fecha (AAMMDD) | 1 letra sexo | 2 letras estado | 3 consonantes | 2 alfanuméricos
 const CURP_REGEX = /^[A-Z]{4}\d{6}[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{2}$/;
+let curpTimer = null;
 
 function validarCurpFormato() {
     const val = document.getElementById('curp').value.trim().toUpperCase();
@@ -358,7 +360,59 @@ function validarCurpFormato() {
 }
 
 function validarCurp() {
+    const campo     = document.getElementById('curp');
+    const indicador = document.getElementById('curp-status');
+    const curp      = campo.value.trim().toUpperCase();
+    campo.value     = curp;
+
     validarCurpFormato();
+    clearTimeout(curpTimer);
+
+    if (curp.length < 18) {
+        if (indicador) indicador.innerHTML = '';
+        return;
+    }
+
+    if (curp.length === 18 && CURP_REGEX.test(curp)) {
+        if (indicador) indicador.innerHTML = '<span style="color:#f39c12;"><i class="fas fa-circle-notch fa-spin"></i> Verificando en RENAPO...</span>';
+        curpTimer = setTimeout(() => consultarCURPapi(curp, indicador), 800);
+    }
+}
+
+async function consultarCURPapi(curp, indicador) {
+    try {
+        const resp = await fetch('/api/validar_curp/' + curp, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await resp.json();
+
+        if (data.valida === true) {
+            indicador.innerHTML = '<span style="color:#27ae60;"><i class="fas fa-check-circle"></i> CURP válida — ' + data.nombre + ' ' + data.paterno + ' ' + data.materno + '</span>';
+
+            // Autocompletar nombre si está vacío
+            const campoNombre = document.getElementById('nombre');
+            if (campoNombre && !campoNombre.value.trim()) {
+                campoNombre.value = (data.nombre + ' ' + data.paterno + ' ' + data.materno).trim();
+                campoNombre.style.background = '#e8f5e9';
+            }
+            // Autocompletar fecha de nacimiento
+            const campoFecha = document.getElementById('fecha_nacimiento');
+            if (campoFecha && !campoFecha.value && data.nacimiento) {
+                const partes = data.nacimiento.split('/');
+                if (partes.length === 3) {
+                    campoFecha.value = partes[2] + '-' + partes[1].padStart(2,'0') + '-' + partes[0].padStart(2,'0');
+                    campoFecha.style.background = '#e8f5e9';
+                }
+            }
+        } else if (data.valida === false) {
+            indicador.innerHTML = '<span style="color:#c0392b;"><i class="fas fa-times-circle"></i> ' + data.mensaje + '</span>';
+        } else {
+            indicador.innerHTML = '<span style="color:#f39c12;"><i class="fas fa-exclamation-triangle"></i> ' + data.mensaje + '</span>';
+        }
+    } catch(e) {
+        indicador.innerHTML = '<span style="color:#999;"><i class="fas fa-exclamation-circle"></i> No se pudo verificar la CURP.</span>';
+    }
 }
 </script>
 </body>
