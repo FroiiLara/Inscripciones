@@ -149,12 +149,19 @@ def api_validar_curp(curp):
 
 HCAPTCHA_SECRET  = os.environ.get('HCAPTCHA_SECRET_KEY', '')
 HCAPTCHA_SITEKEY = os.environ.get('HCAPTCHA_SITE_KEY', '')
-print(f"DEBUG HCAPTCHA_SITE_KEY: '{HCAPTCHA_SITEKEY}'")
 
 def verificar_hcaptcha(token):
-    """Verifica el token hCaptcha con el servidor de hCaptcha."""
+    """Verifica el token hCaptcha con el servidor de hCaptcha.
+    En desarrollo local (FLASK_ENV=development o DEBUG=True) se omite la verificación.
+    """
     import urllib.request
     import urllib.parse
+
+    # Omitir verificación en desarrollo local
+    entorno = os.environ.get('FLASK_ENV', 'production')
+    es_local = entorno == 'development' or os.environ.get('DEBUG', '').lower() == 'true'
+    if es_local:
+        return True
 
     if not token or not HCAPTCHA_SECRET:
         return False
