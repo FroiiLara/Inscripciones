@@ -1,0 +1,51 @@
+# ================================================================
+# .dockerignore — Sistema de Inscripciones UTSC
+# Archivos que NO se copian al contenedor Docker
+# ================================================================
+
+# Variables de entorno — NUNCA deben entrar al contenedor
+.env
+.env.*
+
+# Control de versiones
+.git
+.gitignore
+.gitattributes
+
+# Caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+ENV/
+
+# Archivos de subida local (Cloudinary los maneja en producción)
+static/uploads/
+
+# Editores e IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Documentación y archivos de desarrollo
+README.md
+*.md
+
+# Logs
+*.log
+
+# Archivos de Docker (no incluirse a sí mismos)
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile*

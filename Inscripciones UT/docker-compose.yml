@@ -1,0 +1,54 @@
+# ================================================================
+# docker-compose.yml — Sistema de Inscripciones UTSC
+# Solo para desarrollo local — Render usa el Dockerfile directamente
+#
+# Comandos:
+#   Levantar:  docker-compose up -d
+#   Detener:   docker-compose down
+#   Logs:      docker-compose logs -f
+#   Rebuild:   docker-compose up -d --build
+# ================================================================
+
+version: '3.8'
+
+services:
+
+  # ── Aplicación Flask ──────────────────────────────────────────
+  web:
+    # Construir la imagen desde el Dockerfile local
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Nombre del contenedor
+    container_name: inscripciones-utsc
+
+    # Mapeo de puertos: puerto_host:puerto_contenedor
+    ports:
+      - "5000:5000"
+
+    # Cargar variables de entorno desde el archivo .env local
+    env_file:
+      - .env
+
+    # Variables adicionales para desarrollo local
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+
+    # Volumen para desarrollo: cambios en el código se reflejan
+    # sin necesidad de reconstruir la imagen
+    volumes:
+      - .:/app
+      - /app/__pycache__    # excluir caché de Python del volumen
+
+    # Reiniciar automáticamente si el contenedor falla
+    restart: unless-stopped
+
+    # Verificación de salud del contenedor
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
