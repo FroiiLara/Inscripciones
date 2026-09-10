@@ -10,8 +10,9 @@ TIEMPO_BLOQUEO_MINUTOS = 15
 from dotenv import load_dotenv
 from flask import (
     Flask, request, render_template,
-    redirect, url_for, flash, abort
+    redirect, url_for, flash, abort, jsonify
 )
+from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from pymongo import MongoClient
 from sendgrid import SendGridAPIClient
@@ -42,11 +43,20 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY")
 
+# ── CORS para la app móvil Flutter ────────────────────────
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
+
 bcrypt = Bcrypt(app)
 
 # ================= JWT CONFIG =================
 app.config["JWT_SECRET_KEY"]          = os.environ.get("JWT_SECRET_KEY")
-app.config["JWT_TOKEN_LOCATION"]      = ["cookies"]
+app.config["JWT_TOKEN_LOCATION"]      = ["cookies", "headers"]
 app.config["JWT_ACCESS_COOKIE_PATH"]  = "/"
 app.config["JWT_COOKIE_CSRF_PROTECT"] = False   # En producción activar: True
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
@@ -1003,35 +1013,26 @@ def api_registro():
 
     if not matricula or not usuario or not email or not contrasena:
         return jsonify(ok=False, mensaje="Todos los campos son requeridos."), 400
-
     if not matricula.isdigit():
         return jsonify(ok=False, mensaje="La matrícula debe contener solo números."), 400
-
     if not email.endswith("@virtual.utsc.edu.mx"):
         return jsonify(ok=False, mensaje="Debe usar un correo @virtual.utsc.edu.mx"), 400
 
     password_regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$'
     if not re.fullmatch(password_regex, contrasena):
         return jsonify(ok=False,
-            mensaje="La contraseña debe tener mínimo 8 caracteres, mayúscula, minúscula, número y símbolo."), 400
-
+            mensaje="La contraseña debe tener mayúscula, minúscula, número y símbolo (mínimo 8 caracteres)."), 400
     if collection.find_one({'matricula': matricula}):
         return jsonify(ok=False, mensaje="La matrícula ya está registrada."), 409
-
     if collection.find_one({'email': email}):
         return jsonify(ok=False, mensaje="El correo ya está registrado."), 409
 
     hashed = bcrypt.generate_password_hash(contrasena).decode('utf-8')
     collection.insert_one({
-        'matricula': matricula,
-        'usuario': usuario,
-        'email': email,
-        'contrasena': hashed,
-        'intentos_fallidos': 0,
-        'bloqueado_hasta': None,
-        'es_admin': False
+        'matricula': matricula, 'usuario': usuario,
+        'email': email, 'contrasena': hashed,
+        'intentos_fallidos': 0, 'bloqueado_hasta': None, 'es_admin': False
     })
-
     return jsonify(ok=True, mensaje="Registro exitoso. Inicia sesión."), 201
 
 
@@ -1084,11 +1085,9 @@ def api_admin_actualizar_estatus():
 
     col = inscripciones_col if tipo == 'inscripcion' else reinscripciones_col
     result = col.update_one({'folio': folio}, {'$set': {'estatus': estatus}})
-
     if result.matched_count == 0:
         return jsonify(ok=False, mensaje="Folio no encontrado."), 404
 
-    # Notificar al alumno por correo
     try:
         solicitud = col.find_one({'folio': folio})
         if solicitud:
@@ -1097,8 +1096,8 @@ def api_admin_actualizar_estatus():
                 asunto = f"Actualización de tu solicitud {folio}"
                 cuerpo = (
                     f"<p>Hola <strong>{alumno.get('usuario','')}</strong>,</p>"
-                    f"<p>Tu solicitud con folio <strong>{folio}</strong> fue actualizada a: <strong>{estatus}</strong>.</p>"
-                    f"<p>Visita el sistema: <a href=\"https://inscripciones-8f4j.onrender.com\">inscripciones-8f4j.onrender.com</a></p>"
+                    f"<p>Tu solicitud <strong>{folio}</strong> fue actualizada a: <strong>{estatus}</strong>.</p>"
+                    f"<p>Visita: <a href=\"https://inscripciones-8f4j.onrender.com\">inscripciones-8f4j.onrender.com</a></p>"
                     f"<p>Saludos,<br>Control Escolar UTSC</p>"
                 )
                 enviar_email(alumno['email'], asunto, cuerpo)
@@ -1110,4 +1109,3 @@ def api_admin_actualizar_estatus():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
-
