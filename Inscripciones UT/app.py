@@ -937,5 +937,177 @@ def handle_unexpected_error(e):
     print(f"Unexpected error: {e}")
     return render_template("500.html"), 500
 
+
+# ======================================================
+# API JSON — ENDPOINTS PARA APP MÓVIL FLUTTER
+# ======================================================
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data       = request.get_json(silent=True) or {}
+    matricula  = str(data.get('matricula', '')).strip()
+    contrasena = str(data.get('contrasena', ''))
+
+    if not matricula or not contrasena:
+        return jsonify(ok=False, mensaje="Matrícula y contraseña son requeridos."), 400
+
+    user = collection.find_one({'matricula': matricula})
+    if not user:
+        return jsonify(ok=False, mensaje="Matrícula o contraseña incorrectos."), 401
+
+    bloqueado_hasta = user.get('bloqueado_hasta')
+    if bloqueado_hasta and datetime.utcnow() < bloqueado_hasta:
+        mins = int((bloqueado_hasta - datetime.utcnow()).total_seconds() / 60)
+        return jsonify(ok=False, mensaje=f"Cuenta bloqueada. Espera {mins} minutos."), 401
+
+    if bcrypt.check_password_hash(user['contrasena'], contrasena):
+        collection.update_one(
+            {'_id': user['_id']},
+            {'$set': {'intentos_fallidos': 0, 'bloqueado_hasta': None}}
+        )
+        token = create_access_token(identity=user['matricula'])
+        return jsonify(
+            ok=True,
+            access_token=token,
+            usuario=user['usuario'],
+            matricula=user['matricula'],
+            es_admin=user.get('es_admin', False)
+        ), 200
+
+    intentos = user.get('intentos_fallidos', 0) + 1
+    if intentos >= MAX_INTENTOS:
+        bloqueo = datetime.utcnow() + timedelta(minutes=TIEMPO_BLOQUEO_MINUTOS)
+        collection.update_one(
+            {'_id': user['_id']},
+            {'$set': {'intentos_fallidos': intentos, 'bloqueado_hasta': bloqueo}}
+        )
+        return jsonify(ok=False,
+            mensaje="Demasiados intentos. Cuenta bloqueada por 15 minutos."), 401
+
+    restantes = MAX_INTENTOS - intentos
+    collection.update_one(
+        {'_id': user['_id']},
+        {'$set': {'intentos_fallidos': intentos}}
+    )
+    return jsonify(ok=False,
+        mensaje=f"Contraseña incorrecta. Te quedan {restantes} intentos."), 401
+
+
+@app.route('/api/registro', methods=['POST'])
+def api_registro():
+    data       = request.get_json(silent=True) or {}
+    matricula  = str(data.get('matricula', '')).strip()
+    usuario    = str(data.get('usuario', '')).strip()
+    email      = str(data.get('email', '')).lower().strip()
+    contrasena = str(data.get('contrasena', ''))
+
+    if not matricula or not usuario or not email or not contrasena:
+        return jsonify(ok=False, mensaje="Todos los campos son requeridos."), 400
+
+    if not matricula.isdigit():
+        return jsonify(ok=False, mensaje="La matrícula debe contener solo números."), 400
+
+    if not email.endswith("@virtual.utsc.edu.mx"):
+        return jsonify(ok=False, mensaje="Debe usar un correo @virtual.utsc.edu.mx"), 400
+
+    password_regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$'
+    if not re.fullmatch(password_regex, contrasena):
+        return jsonify(ok=False,
+            mensaje="La contraseña debe tener mínimo 8 caracteres, mayúscula, minúscula, número y símbolo."), 400
+
+    if collection.find_one({'matricula': matricula}):
+        return jsonify(ok=False, mensaje="La matrícula ya está registrada."), 409
+
+    if collection.find_one({'email': email}):
+        return jsonify(ok=False, mensaje="El correo ya está registrado."), 409
+
+    hashed = bcrypt.generate_password_hash(contrasena).decode('utf-8')
+    collection.insert_one({
+        'matricula': matricula,
+        'usuario': usuario,
+        'email': email,
+        'contrasena': hashed,
+        'intentos_fallidos': 0,
+        'bloqueado_hasta': None,
+        'es_admin': False
+    })
+
+    return jsonify(ok=True, mensaje="Registro exitoso. Inicia sesión."), 201
+
+
+@app.route('/api/perfil', methods=['GET'])
+@jwt_required()
+def api_perfil():
+    matricula = get_jwt_identity()
+    user = collection.find_one({'matricula': matricula}, {'_id': 0, 'contrasena': 0})
+    if not user:
+        return jsonify(ok=False, mensaje="Usuario no encontrado."), 404
+    return jsonify(ok=True, **user), 200
+
+
+@app.route('/api/historial', methods=['GET'])
+@jwt_required()
+def api_historial():
+    matricula = get_jwt_identity()
+    inscs  = list(inscripciones_col.find({'usuario': matricula}, {'_id': 0}))
+    reincs = list(reinscripciones_col.find({'usuario': matricula}, {'_id': 0}))
+    return jsonify(ok=True, inscripciones=inscs, reinscripciones=reincs), 200
+
+
+@app.route('/api/admin/solicitudes', methods=['GET'])
+@jwt_required()
+def api_admin_solicitudes():
+    matricula = get_jwt_identity()
+    user = collection.find_one({'matricula': matricula})
+    if not user or not user.get('es_admin'):
+        return jsonify(ok=False, mensaje="Acceso denegado."), 403
+    inscs  = list(inscripciones_col.find({}, {'_id': 0}))
+    reincs = list(reinscripciones_col.find({}, {'_id': 0}))
+    return jsonify(ok=True, inscripciones=inscs, reinscripciones=reincs), 200
+
+
+@app.route('/api/admin/actualizar_estatus', methods=['POST'])
+@jwt_required()
+def api_admin_actualizar_estatus():
+    matricula = get_jwt_identity()
+    user = collection.find_one({'matricula': matricula})
+    if not user or not user.get('es_admin'):
+        return jsonify(ok=False, mensaje="Acceso denegado."), 403
+
+    data    = request.get_json(silent=True) or {}
+    folio   = data.get('folio', '')
+    tipo    = data.get('tipo', '')
+    estatus = data.get('estatus', '')
+
+    if not folio or not tipo or not estatus:
+        return jsonify(ok=False, mensaje="Datos incompletos."), 400
+
+    col = inscripciones_col if tipo == 'inscripcion' else reinscripciones_col
+    result = col.update_one({'folio': folio}, {'$set': {'estatus': estatus}})
+
+    if result.matched_count == 0:
+        return jsonify(ok=False, mensaje="Folio no encontrado."), 404
+
+    # Notificar al alumno por correo
+    try:
+        solicitud = col.find_one({'folio': folio})
+        if solicitud:
+            alumno = collection.find_one({'matricula': solicitud.get('usuario', '')})
+            if alumno and alumno.get('email'):
+                asunto = f"Actualización de tu solicitud {folio}"
+                cuerpo = (
+                    f"<p>Hola <strong>{alumno.get('usuario','')}</strong>,</p>"
+                    f"<p>Tu solicitud con folio <strong>{folio}</strong> fue actualizada a: <strong>{estatus}</strong>.</p>"
+                    f"<p>Visita el sistema: <a href=\"https://inscripciones-8f4j.onrender.com\">inscripciones-8f4j.onrender.com</a></p>"
+                    f"<p>Saludos,<br>Control Escolar UTSC</p>"
+                )
+                enviar_email(alumno['email'], asunto, cuerpo)
+    except Exception as e:
+        print(f"Error enviando correo: {e}")
+
+    return jsonify(ok=True, mensaje=f"Estatus actualizado a {estatus}."), 200
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
