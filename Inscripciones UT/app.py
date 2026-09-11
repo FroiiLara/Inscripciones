@@ -1,3 +1,4 @@
+# v2.1 — API móvil con CORS
 import os
 import re
 import uuid
