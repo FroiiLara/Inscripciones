@@ -1,4 +1,3 @@
-# v2.1 — API móvil con CORS
 import os
 import re
 import uuid
@@ -1106,6 +1105,46 @@ def api_admin_actualizar_estatus():
         print(f"Error enviando correo: {e}")
 
     return jsonify(ok=True, mensaje=f"Estatus actualizado a {estatus}."), 200
+
+
+
+@app.route('/api/recuperar_contrasena', methods=['POST'])
+def api_recuperar_contrasena():
+    data  = request.get_json(silent=True) or {}
+    email = str(data.get('email', '')).lower().strip()
+
+    if not email:
+        return jsonify(ok=False, mensaje="El correo es requerido."), 400
+
+    if not email.endswith('@virtual.utsc.edu.mx'):
+        return jsonify(ok=False, mensaje="Debe ser un correo @virtual.utsc.edu.mx"), 400
+
+    usuario = collection.find_one({'email': email})
+    if not usuario:
+        # Por seguridad no revelamos si existe o no
+        return jsonify(ok=True, mensaje="Si el correo está registrado, recibirás un enlace."), 200
+
+    token  = serializer.dumps(email, salt='password-reset-salt')
+    enlace = url_for('restablecer_contrasena', token=token, _external=True)
+    asunto = "Recuperación de contraseña — UTSC"
+    cuerpo = f"""
+        <p>Hola <strong>{usuario.get('usuario', '')}</strong>,</p>
+        <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
+        <p>Haz clic en el siguiente enlace para crear una nueva contraseña:</p>
+        <p><a href="{enlace}" style="background:#1A5F5C;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;">
+            Restablecer contraseña
+        </a></p>
+        <p>Este enlace expirará en <strong>1 hora</strong>.</p>
+        <p>Si no solicitaste este cambio, ignora este mensaje.</p>
+        <p>Saludos,<br>Control Escolar UTSC</p>
+    """
+    try:
+        enviar_email(email, asunto, cuerpo)
+    except Exception as e:
+        print(f"Error enviando correo: {e}")
+        return jsonify(ok=False, mensaje="Error al enviar el correo. Intenta más tarde."), 500
+
+    return jsonify(ok=True, mensaje="Si el correo está registrado, recibirás un enlace."), 200
 
 
 if __name__ == '__main__':
