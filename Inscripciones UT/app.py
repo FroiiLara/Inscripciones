@@ -10,7 +10,8 @@ TIEMPO_BLOQUEO_MINUTOS = 15
 from dotenv import load_dotenv
 from flask import (
     Flask, request, render_template,
-    redirect, url_for, flash, abort, jsonify
+    redirect, url_for, flash, abort, jsonify,
+    send_from_directory
 )
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
@@ -434,6 +435,16 @@ def enviar_notificacion_estatus(email, nombre, folio, tipo, nuevo_estatus):
 @app.route('/')
 def home():
     return redirect(url_for('login'))
+
+
+@app.route('/service-worker.js')
+def service_worker():
+    """Sirve el Service Worker desde la raíz (no desde /static/) para que
+    su 'scope' cubra todo el sitio y no solo la carpeta static."""
+    response = send_from_directory('static', 'service-worker.js')
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 
 @app.route('/registro', methods=['GET', 'POST'])

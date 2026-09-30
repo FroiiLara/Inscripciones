@@ -8,6 +8,8 @@
     <link rel="icon" type="image/png" href="/static/img/logo.png">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0B3D2E">
 </head>
 <body>
 
@@ -130,5 +132,6 @@ function toggleMenu() {
 }
 </script>
 
+<script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
 </body>
 </html>

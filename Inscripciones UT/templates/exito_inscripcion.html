@@ -48,6 +48,8 @@
             .folio-box { background: #1a5f5c !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0B3D2E">
 </head>
 <body>
 
@@ -143,5 +145,6 @@
 <script>
 function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
 </script>
+<script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
 </body>
 </html>

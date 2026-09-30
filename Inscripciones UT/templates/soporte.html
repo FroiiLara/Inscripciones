@@ -25,6 +25,8 @@
         .loader-mapa { text-align:center; padding:20px; color:#999; font-size:0.9rem; }
         .mapa-footer { margin-top:8px; font-size:0.78rem; color:#999; text-align:right; }
     </style>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0B3D2E">
 </head>
 <body>
 <header>
@@ -162,5 +164,6 @@ function initMapa() {
 window.addEventListener('load', initMapa);
 function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
 </script>
+<script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
 </body>
 </html>

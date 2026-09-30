@@ -1,0 +1,25 @@
+{
+  "name": "Inscripciones UTSC",
+  "short_name": "Inscripciones UT",
+  "description": "Sistema de inscripción y reinscripción de la Universidad Tecnológica de Santa Catarina.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#0B3D2E",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

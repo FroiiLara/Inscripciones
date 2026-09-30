@@ -12,6 +12,8 @@
         .error-icon { font-size: 80px; color: #c62828; margin-bottom: 20px; }
         .error-code { font-size: 6rem; font-weight: bold; color: var(--nl-green); margin: 0; }
     </style>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0B3D2E">
 </head>
 <body>
 <div class="container">
@@ -25,5 +27,6 @@
         </a>
     </div>
 </div>
+<script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
 </body>
 </html>

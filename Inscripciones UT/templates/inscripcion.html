@@ -42,6 +42,8 @@
         .resumen-bloque h4 { color:var(--nl-green); margin-top:0; border-bottom:1px solid #ddd; padding-bottom:8px; }
         .resumen-bloque p { margin:6px 0; font-size:0.92rem; }
     </style>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0B3D2E">
 </head>
 <body>
 
@@ -415,5 +417,6 @@ async function consultarCURPapi(curp, indicador) {
     }
 }
 </script>
+<script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
 </body>
 </html>
