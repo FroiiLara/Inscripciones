@@ -9,3 +9,4 @@ werkzeug
 cloudinary
 dnspython
 flask-cors
+openpyxl

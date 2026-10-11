@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Administrador UTSC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_extra.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0B3D2E">
+</head>
+<body>
+{% include '_admin_head.html' %}
+
+<div class="container">
+    <div class="univ-header">
+        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}" alt="Logo Universidad" class="univ-logo">
+    </div>
+
+    <div class="card card-wide">
+        <h2 style="text-align:left;color:var(--nl-green);"><i class="fas fa-shield-alt"></i> Panel de Administrador</h2>
+        {% set seccion = 'dashboard' %}{% include '_admin_subnav.html' %}
+
+        <div class="dash-toolbar">
+            <form method="GET" action="/admin/dashboard">
+                <label for="estatus" style="font-size:0.85rem;font-weight:600;color:var(--nl-green);">Mostrar solicitudes:</label>
+                <select name="estatus" id="estatus" onchange="this.form.submit()">
+                    <option value="Todas" {{ 'selected' if estatus_sel == 'Todas' }}>Todas</option>
+                    {% for e in estatus_opciones %}
+                    <option value="{{ e }}" {{ 'selected' if estatus_sel == e }}>{{ e }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            <span class="dash-meta">Actualizado: {{ stats.generado }} UTC</span>
+        </div>
+
+        <!-- INDICADORES -->
+        <div class="kpi-grid">
+            <div class="kpi"><div class="kpi-num">{{ stats.totales.alumnos }}</div><div class="kpi-lbl">Alumnos distintos</div></div>
+            <div class="kpi"><div class="kpi-num">{{ stats.totales.inscripciones }}</div><div class="kpi-lbl">Inscripciones</div></div>
+            <div class="kpi kpi-orange"><div class="kpi-num">{{ stats.totales.reinscripciones }}</div><div class="kpi-lbl">Reinscripciones</div></div>
+            <div class="kpi"><div class="kpi-num">{{ stats.estatus.total['En revisión'] }}</div><div class="kpi-lbl">Pendientes de revisión</div></div>
+            <div class="kpi"><div class="kpi-num">{{ stats.tasa_aprobacion ~ '%' if stats.tasa_aprobacion is not none else 'N/D' }}</div><div class="kpi-lbl">Tasa de aprobación</div></div>
+            <div class="kpi kpi-orange"><div class="kpi-txt">{{ stats.carrera_top or 'Sin datos' }}</div><div class="kpi-lbl">Carrera con más solicitudes</div></div>
+        </div>
+
+        <!-- GRÁFICAS -->
+        <div class="chart-grid">
+            <div class="chart-box full">
+                <h3><i class="fas fa-graduation-cap"></i> Solicitudes por carrera</h3>
+                <div class="chart-wrap tall"><canvas id="chCarreras" aria-label="Solicitudes por carrera"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <h3><i class="fas fa-circle-half-stroke"></i> Solicitudes por estatus</h3>
+                <div class="chart-wrap"><canvas id="chEstatus" aria-label="Solicitudes por estatus"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <h3><i class="fas fa-layer-group"></i> Reinscripciones por cuatrimestre</h3>
+                <div class="chart-wrap"><canvas id="chCuatri" aria-label="Reinscripciones por cuatrimestre"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <h3><i class="fas fa-calendar-alt"></i> Solicitudes por mes (últimos 12 meses)</h3>
+                <div class="chart-wrap"><canvas id="chMeses" aria-label="Solicitudes por mes"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <h3><i class="fas fa-cake-candles"></i> Edad de los aspirantes (inscripciones)</h3>
+                <div class="chart-wrap"><canvas id="chEdades" aria-label="Edad de los aspirantes"></canvas></div>
+            </div>
+        </div>
+
+        <!-- TABLA (versión accesible de la gráfica de carreras) -->
+        <div class="chart-box" style="overflow-x:auto;">
+            <h3><i class="fas fa-table"></i> Detalle por carrera</h3>
+            <table class="tabla-resumen">
+                <thead>
+                    <tr><th>Carrera</th><th class="num">Inscripciones</th><th class="num">Reinscripciones</th><th class="num">Total</th></tr>
+                </thead>
+                <tbody>
+                    {% for c in stats.por_carrera %}
+                    <tr><td>{{ c.nombre }}</td><td class="num">{{ c.inscripciones }}</td><td class="num">{{ c.reinscripciones }}</td><td class="num"><strong>{{ c.total }}</strong></td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr><td>Total</td><td class="num">{{ stats.totales.inscripciones }}</td><td class="num">{{ stats.totales.reinscripciones }}</td><td class="num">{{ stats.totales.solicitudes }}</td></tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <p style="margin-top:18px;text-align:right;">
+            <a href="/admin/reportes" class="btn-primary" style="text-decoration:none;display:inline-block;width:auto;padding:10px 22px;"><i class="fas fa-file-excel"></i> Exportar reportes a Excel</a>
+        </p>
+    </div>
+</div>
+
+{% include '_admin_footer.html' %}
+
+<script id="datos-dashboard" type="application/json">{{ stats | tojson }}</script>
+<!-- Chart.js 4.4.1 (MIT) incluido localmente en static/js: no depende de CDN ni del CSP -->
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
+<script>
+(function () {
+    const d = JSON.parse(document.getElementById('datos-dashboard').textContent);
+    const VERDE = '#024240', NARANJA = '#ff8a00';
+    const C_REV = '#f57f17', C_APR = '#2e7d32', C_REC = '#c62828';
+
+    if (typeof Chart === 'undefined') {
+        document.querySelectorAll('.chart-wrap').forEach(function (w) {
+            w.innerHTML = '<p class="chart-vacio">No se pudo cargar la librería de gráficas. Consulta la tabla de detalle.</p>';
+        });
+        return;
+    }
+    Chart.defaults.font.family = "'Poppins', sans-serif";
+    Chart.defaults.maintainAspectRatio = false;
+    const enteros = { beginAtZero: true, ticks: { precision: 0 } };
+
+    // 1. Por carrera (barras horizontales apiladas)
+    const car = d.por_carrera;
+    new Chart(document.getElementById('chCarreras'), {
+        type: 'bar',
+        data: {
+            labels: car.map(c => c.nombre),
+            datasets: [
+                { label: 'Inscripciones',   data: car.map(c => c.inscripciones),   backgroundColor: VERDE },
+                { label: 'Reinscripciones', data: car.map(c => c.reinscripciones), backgroundColor: NARANJA }
+            ]
+        },
+        options: {
+            indexAxis: 'y',
+            scales: { x: Object.assign({ stacked: true }, enteros), y: { stacked: true, ticks: { autoSkip: false } } },
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+
+    // 2. Estatus (dona)
+    const e = d.estatus.total;
+    new Chart(document.getElementById('chEstatus'), {
+        type: 'doughnut',
+        data: {
+            labels: ['En revisión', 'Aprobada', 'Rechazada'],
+            datasets: [{ data: [e['En revisión'], e['Aprobada'], e['Rechazada']], backgroundColor: [C_REV, C_APR, C_REC] }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, cutout: '58%' }
+    });
+
+    // 3. Cuatrimestre
+    new Chart(document.getElementById('chCuatri'), {
+        type: 'bar',
+        data: {
+            labels: d.por_cuatrimestre.map(c => c.cuatrimestre + '°'),
+            datasets: [{ label: 'Reinscripciones', data: d.por_cuatrimestre.map(c => c.total), backgroundColor: NARANJA }]
+        },
+        options: { scales: { y: enteros }, plugins: { legend: { display: false } } }
+    });
+
+    // 4. Por mes
+    new Chart(document.getElementById('chMeses'), {
+        type: 'line',
+        data: {
+            labels: d.por_mes.map(m => m.mes),
+            datasets: [
+                { label: 'Inscripciones',   data: d.por_mes.map(m => m.inscripciones),   borderColor: VERDE,   backgroundColor: VERDE,   tension: 0.25 },
+                { label: 'Reinscripciones', data: d.por_mes.map(m => m.reinscripciones), borderColor: NARANJA, backgroundColor: NARANJA, tension: 0.25 }
+            ]
+        },
+        options: { scales: { y: enteros }, plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // 5. Edades
+    new Chart(document.getElementById('chEdades'), {
+        type: 'bar',
+        data: {
+            labels: d.edades.map(x => x.rango + ' años'),
+            datasets: [{ label: 'Aspirantes', data: d.edades.map(x => x.total), backgroundColor: VERDE }]
+        },
+        options: { scales: { y: enteros }, plugins: { legend: { display: false } } }
+    });
+})();
+</script>
+<script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
+</body>
+</html>

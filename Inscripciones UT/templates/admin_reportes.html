@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes | Administrador UTSC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_extra.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0B3D2E">
+</head>
+<body>
+{% include '_admin_head.html' %}
+
+<div class="container">
+    <div class="univ-header">
+        <img src="{{ url_for('static', filename='img/logo_universidad.png') }}" alt="Logo Universidad" class="univ-logo">
+    </div>
+
+    <div class="card card-wide">
+        <h2 style="text-align:left;color:var(--nl-green);"><i class="fas fa-shield-alt"></i> Panel de Administrador</h2>
+        {% set seccion = 'reportes' %}{% include '_admin_subnav.html' %}
+        {% include '_flash.html' %}
+
+        <p style="color:#666;margin-top:0;">Elige el reporte y, si lo necesitas, filtra los datos. Se descarga como archivo de Excel (.xlsx).</p>
+
+        <form method="GET" action="/admin/reportes/exportar" id="formReporte">
+            <h3 style="color:var(--nl-green);font-size:1rem;"><i class="fas fa-filter"></i> Filtros</h3>
+            <div class="rep-filtros">
+                <div>
+                    <label for="estatus">Estatus</label>
+                    <select name="estatus" id="estatus">
+                        <option value="Todas">Todos</option>
+                        {% for e in estatus_opciones %}<option value="{{ e }}">{{ e }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="carrera">Carrera</label>
+                    <select name="carrera" id="carrera">
+                        <option value="Todas">Todas</option>
+                        {% for clave, nombre in carreras.items() %}<option value="{{ clave }}">{{ nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="desde">Solicitudes desde</label>
+                    <input type="date" name="desde" id="desde">
+                </div>
+                <div>
+                    <label for="hasta">Solicitudes hasta</label>
+                    <input type="date" name="hasta" id="hasta">
+                </div>
+            </div>
+
+            <h3 style="color:var(--nl-green);font-size:1rem;"><i class="fas fa-table-list"></i> Tipo de reporte</h3>
+            <div class="rep-tipos">
+                {% set descripciones = {
+                    'general': 'Libro completo: resumen con gráfica, por carrera, inscripciones, reinscripciones y rechazadas.',
+                    'inscripciones': 'Una fila por inscripción: datos del aspirante, carrera, edad, estatus y motivo de rechazo.',
+                    'reinscripciones': 'Una fila por reinscripción: cuatrimestre, materias, pago, estatus y motivo de rechazo.',
+                    'por_carrera': 'Conteo de inscripciones, reinscripciones y estatus por carrera, con gráfica.',
+                    'rechazadas': 'Solicitudes rechazadas con el motivo capturado por el administrador.'
+                } %}
+                {% for clave, titulo in tipos.items() %}
+                <label class="rep-tipo {{ 'sel' if loop.first }}">
+                    <input type="radio" name="tipo" value="{{ clave }}" {{ 'checked' if loop.first }}>
+                    <span class="rep-titulo">{{ titulo }}</span>
+                    <span class="rep-desc">{{ descripciones[clave] }}</span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="btn-excel"><i class="fas fa-file-excel"></i> Descargar Excel</button>
+        </form>
+    </div>
+</div>
+
+{% include '_admin_footer.html' %}
+
+<script>
+document.querySelectorAll('.rep-tipo input').forEach(function (r) {
+    r.addEventListener('change', function () {
+        document.querySelectorAll('.rep-tipo').forEach(function (l) { l.classList.remove('sel'); });
+        r.closest('.rep-tipo').classList.add('sel');
+    });
+});
+document.getElementById('formReporte').addEventListener('submit', function (ev) {
+    var d = document.getElementById('desde').value, h = document.getElementById('hasta').value;
+    if (d && h && d > h) { ev.preventDefault(); alert("La fecha 'desde' no puede ser posterior a 'hasta'."); }
+});
+</script>
+<script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
+</body>
+</html>

@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from flask import (
     Flask, request, render_template,
     redirect, url_for, flash, abort, jsonify,
-    send_from_directory
+    send_from_directory, send_file
 )
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
@@ -20,6 +20,9 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from itsdangerous import URLSafeTimedSerializer as Serializer, BadSignature, SignatureExpired
 from werkzeug.utils import secure_filename
+from markupsafe import escape
+
+import reportes   # estadísticas del dashboard y exportación a Excel
 
 # ================= CLOUDINARY =================
 import cloudinary
@@ -271,6 +274,42 @@ CARRERAS = {
     'LLI':  'Lic. en Educación (Enseñanza del Idioma Inglés)'
 }
 
+# ================= REGLAS DE NEGOCIO =================
+EDAD_MINIMA      = 18
+EDAD_MAXIMA      = 100
+ESTATUS_VALIDOS  = ['Aprobada', 'Rechazada', 'En revisión']
+MOTIVO_MIN       = 5
+MOTIVO_MAX       = 500
+
+
+def validar_fecha_nacimiento(texto, hoy=None):
+    """Valida la fecha de nacimiento (formato AAAA-MM-DD) de una inscripción.
+    Devuelve (True, date) o (False, mensaje_de_error).
+    Reglas: formato válido, no futura y edad cumplida entre EDAD_MINIMA y EDAD_MAXIMA."""
+    hoy = hoy or datetime.utcnow().date()
+    try:
+        fn = datetime.strptime(str(texto).strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return False, "La fecha de nacimiento no tiene un formato válido."
+    if fn > hoy:
+        return False, "La fecha de nacimiento no puede ser futura."
+    edad = reportes.calcular_edad(fn, hoy)
+    if edad < EDAD_MINIMA:
+        return False, f"Debes tener al menos {EDAD_MINIMA} años cumplidos para inscribirte."
+    if edad > EDAD_MAXIMA:
+        return False, "La fecha de nacimiento no es válida."
+    return True, fn
+
+
+def validar_motivo_rechazo(texto):
+    """Devuelve (True, motivo_limpio) o (False, mensaje_de_error)."""
+    motivo = " ".join(str(texto or "").split())      # quita saltos y espacios repetidos
+    if len(motivo) < MOTIVO_MIN:
+        return False, f"Escribe el motivo del rechazo (mínimo {MOTIVO_MIN} caracteres)."
+    if len(motivo) > MOTIVO_MAX:
+        return False, f"El motivo no puede exceder {MOTIVO_MAX} caracteres."
+    return True, motivo
+
 # ======================================================
 # UTILIDADES DE SEGURIDAD
 # ======================================================
@@ -401,10 +440,18 @@ def enviar_confirmacion_reinscripcion(email, nombre, folio, carrera, cuatrimestr
     """
     enviar_email(email, asunto, cuerpo)
 
-def enviar_notificacion_estatus(email, nombre, folio, tipo, nuevo_estatus):
+def enviar_notificacion_estatus(email, nombre, folio, tipo, nuevo_estatus, motivo=None):
     color = "#2e7d32" if nuevo_estatus == "Aprobada" else "#c62828"
     icono = "✅" if nuevo_estatus == "Aprobada" else "❌"
     asunto = f"{icono} Tu {tipo} ha sido {nuevo_estatus} — Folio {folio}"
+    bloque_motivo = ""
+    if nuevo_estatus == "Rechazada" and motivo:
+        bloque_motivo = (
+            '<div style="background:#ffebee;border-left:4px solid #c62828;padding:12px 16px;margin:20px 0;">'
+            '<strong style="color:#c62828;">Motivo del rechazo:</strong><br>'
+            f'{escape(motivo)}</div>'
+            '<p style="color:#555;">Corrige lo indicado y vuelve a enviar tu solicitud.</p>'
+        )
     cuerpo = f"""
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;">
         <div style="background:#1a5f5c;padding:20px;text-align:center;">
@@ -419,6 +466,7 @@ def enviar_notificacion_estatus(email, nombre, folio, tipo, nuevo_estatus):
                     {nuevo_estatus}
                 </span>
             </div>
+            {bloque_motivo}
             <p style="color:#555;">Si tienes dudas, comunícate con Control Escolar.</p>
         </div>
         <div style="background:#f5f5f5;padding:15px;text-align:center;font-size:0.8rem;color:#999;">
@@ -692,43 +740,194 @@ def admin_panel():
     )
 
 
+def aplicar_cambio_estatus(tipo, folio, nuevo_estatus, motivo, admin_matricula):
+    """Lógica compartida por el panel web y la API móvil.
+    Devuelve (ok, mensaje, codigo_http)."""
+    if tipo not in ('inscripcion', 'reinscripcion'):
+        return False, "Tipo de solicitud no válido.", 400
+    if nuevo_estatus not in ESTATUS_VALIDOS:
+        return False, "Estatus no válido.", 400
+
+    motivo_limpio = None
+    if nuevo_estatus == 'Rechazada':
+        ok, resultado = validar_motivo_rechazo(motivo)
+        if not ok:
+            return False, resultado, 400
+        motivo_limpio = resultado
+
+    col = inscripciones_col if tipo == 'inscripcion' else reinscripciones_col
+    doc = col.find_one({"folio": folio})
+    if not doc:
+        return False, "Solicitud no encontrada.", 404
+
+    cambios = {"$set": {
+        "estatus"       : nuevo_estatus,
+        "fecha_revision": datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+        "revisado_por"  : admin_matricula,
+    }}
+    if motivo_limpio:
+        cambios["$set"]["motivo_rechazo"] = motivo_limpio
+    else:
+        cambios["$unset"] = {"motivo_rechazo": ""}      # al aprobar / reabrir se borra el motivo previo
+    col.update_one({"folio": folio}, cambios)
+
+    # Notificar al alumno por correo si el estatus cambia a Aprobada o Rechazada
+    if nuevo_estatus in ('Aprobada', 'Rechazada'):
+        alumno = collection.find_one({"matricula": doc.get("usuario")})
+        if alumno and alumno.get("email"):
+            enviar_notificacion_estatus(
+                alumno["email"],
+                doc.get("nombre", alumno.get("usuario", "Alumno")),
+                folio,
+                "inscripción" if tipo == "inscripcion" else "reinscripción",
+                nuevo_estatus,
+                motivo_limpio
+            )
+
+    return True, f"Estatus del folio {folio} actualizado a '{nuevo_estatus}'.", 200
+
+
 @app.route('/admin/actualizar_estatus', methods=['POST'])
 @admin_required
 def actualizar_estatus():
-    folio       = request.form.get('folio', '').strip()
-    tipo        = request.form.get('tipo', '').strip()      # 'inscripcion' o 'reinscripcion'
-    nuevo_estatus = request.form.get('estatus', '').strip()
-
-    if nuevo_estatus not in ['Aprobada', 'Rechazada', 'En revisión']:
-        flash("Estatus no válido.", "error")
-        return redirect(url_for('admin_panel'))
-
-    col = inscripciones_col if tipo == 'inscripcion' else reinscripciones_col
-
-    doc = col.find_one({"folio": folio})
-    if not doc:
-        flash("Solicitud no encontrada.", "error")
-        return redirect(url_for('admin_panel'))
-
-    col.update_one({"folio": folio}, {"$set": {"estatus": nuevo_estatus}})
-
-    # Notificar al alumno por correo si el estatus cambia a Aprobada o Rechazada
-    if nuevo_estatus in ['Aprobada', 'Rechazada']:
-        matricula_alumno = doc.get("usuario")
-        alumno = collection.find_one({"matricula": matricula_alumno})
-        if alumno:
-            nombre_alumno = doc.get("nombre", alumno.get("usuario", "Alumno"))
-            tipo_label = "inscripción" if tipo == "inscripcion" else "reinscripción"
-            enviar_notificacion_estatus(
-                alumno["email"],
-                nombre_alumno,
-                folio,
-                tipo_label,
-                nuevo_estatus
-            )
-
-    flash(f"Estatus del folio {folio} actualizado a '{nuevo_estatus}'.", "success")
+    ok, mensaje, _ = aplicar_cambio_estatus(
+        tipo            = request.form.get('tipo', '').strip(),
+        folio           = request.form.get('folio', '').strip(),
+        nuevo_estatus   = request.form.get('estatus', '').strip(),
+        motivo          = request.form.get('motivo', ''),
+        admin_matricula = get_jwt_identity()
+    )
+    flash(mensaje, "success" if ok else "error")
     return redirect(url_for('admin_panel'))
+
+# ======================================================
+# DASHBOARD Y REPORTES DEL ADMINISTRADOR
+# ======================================================
+
+CAMPOS_DASHBOARD = {"_id": 0, "usuario": 1, "carrera": 1, "carrera_clave": 1, "cuatrimestre": 1,
+                    "fecha_solicitud": 1, "fecha_nacimiento": 1, "estatus": 1, "es_estadia": 1}
+
+
+def estadisticas_dashboard(estatus='Todas'):
+    """Lee las solicitudes, aplica el filtro de estatus y calcula las estadísticas."""
+    if estatus not in ESTATUS_VALIDOS:
+        estatus = 'Todas'
+    inscs  = list(inscripciones_col.find({}, CAMPOS_DASHBOARD))
+    reincs = list(reinscripciones_col.find({}, CAMPOS_DASHBOARD))
+    inscs  = reportes.filtrar_solicitudes(inscs,  CARRERAS, estatus=estatus)
+    reincs = reportes.filtrar_solicitudes(reincs, CARRERAS, estatus=estatus)
+    stats = reportes.construir_estadisticas(inscs, reincs, CARRERAS)
+    stats['filtro_estatus'] = estatus
+    return stats
+
+
+@app.route('/admin/dashboard')
+@admin_required
+def admin_dashboard():
+    estatus = request.args.get('estatus', 'Todas')
+    stats = estadisticas_dashboard(estatus)
+    return render_template('admin_dashboard.html', stats=stats,
+                           estatus_sel=stats['filtro_estatus'], estatus_opciones=ESTATUS_VALIDOS)
+
+
+def leer_filtros_reporte(datos):
+    """Lee y valida tipo / estatus / carrera / fechas (de request.args o de un JSON).
+    Devuelve (filtros_dict, None) o (None, mensaje_de_error)."""
+    tipo    = str(datos.get('tipo') or 'general').strip()
+    estatus = str(datos.get('estatus') or 'Todas').strip()
+    carrera = str(datos.get('carrera') or 'Todas').strip()
+    if tipo not in reportes.TIPOS_REPORTE:
+        return None, "Tipo de reporte no válido."
+    if estatus != 'Todas' and estatus not in ESTATUS_VALIDOS:
+        return None, "Estatus no válido."
+    if carrera != 'Todas' and carrera not in CARRERAS:
+        return None, "Carrera no válida."
+    desde = hasta = None
+    for nombre in ('desde', 'hasta'):
+        crudo = str(datos.get(nombre) or '').strip()
+        if crudo:
+            valor = reportes.parsear_fecha_iso(crudo)
+            if valor is None:
+                return None, f"La fecha '{nombre}' no es válida (usa AAAA-MM-DD)."
+            if nombre == 'desde':
+                desde = valor
+            else:
+                hasta = valor
+    if desde and hasta and desde > hasta:
+        return None, "La fecha 'desde' no puede ser posterior a 'hasta'."
+    return {"tipo": tipo, "estatus": estatus, "carrera": carrera, "desde": desde, "hasta": hasta}, None
+
+
+def datos_reporte(f):
+    """Aplica los filtros a las solicitudes. Devuelve (inscripciones, reinscripciones)."""
+    inscs  = list(inscripciones_col.find({}, {"_id": 0}))
+    reincs = list(reinscripciones_col.find({}, {"_id": 0}))
+    args = dict(estatus=f["estatus"], carrera=f["carrera"], desde=f["desde"], hasta=f["hasta"])
+    return (reportes.filtrar_solicitudes(inscs, CARRERAS, **args),
+            reportes.filtrar_solicitudes(reincs, CARRERAS, **args))
+
+
+def respuesta_excel(f):
+    """Construye la respuesta HTTP con el archivo .xlsx del reporte pedido."""
+    inscs, reincs = datos_reporte(f)
+    filtros_txt = reportes.descripcion_filtros(f["estatus"], f["carrera"], f["desde"], f["hasta"], CARRERAS)
+    archivo = reportes.generar_excel(f["tipo"], inscs, reincs, CARRERAS, filtros_txt)
+    nombre = f"reporte_{f['tipo']}_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.xlsx"
+    respuesta = send_file(
+        archivo, as_attachment=True, download_name=nombre,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    respuesta.headers['Cache-Control'] = 'no-store'
+    return respuesta
+
+
+@app.route('/admin/reportes')
+@admin_required
+def admin_reportes():
+    return render_template('admin_reportes.html', carreras=CARRERAS,
+                           tipos=reportes.TIPOS_REPORTE, estatus_opciones=ESTATUS_VALIDOS)
+
+
+@app.route('/admin/reportes/exportar')
+@admin_required
+def admin_reportes_exportar():
+    filtros, error = leer_filtros_reporte(request.args)
+    if error:
+        flash(error, "error")
+        return redirect(url_for('admin_reportes'))
+    return respuesta_excel(filtros)
+
+
+# Enlaces firmados y temporales: permiten que la app móvil abra la descarga en el
+# navegador del teléfono (que no puede enviar el token JWT en la cabecera).
+reporte_serializer = Serializer(app.secret_key, salt="reporte-xlsx")
+REPORTE_ENLACE_SEGUNDOS = 600
+
+
+def url_externa(endpoint, **valores):
+    """url_for(_external=True) pero respetando HTTPS detrás del proxy de Render."""
+    url = url_for(endpoint, _external=True, **valores)
+    proto = request.headers.get('X-Forwarded-Proto', '').split(',')[0].strip()
+    if proto == 'https' and url.startswith('http://'):
+        url = 'https://' + url[len('http://'):]
+    return url
+
+
+@app.route('/descargar_reporte/<token>')
+def descargar_reporte(token):
+    try:
+        datos = reporte_serializer.loads(token, max_age=REPORTE_ENLACE_SEGUNDOS)
+    except SignatureExpired:
+        return render_template("403.html"), 403
+    except BadSignature:
+        abort(403)
+    admin = collection.find_one({"matricula": datos.get("admin")})
+    if not admin or not admin.get("es_admin", False):
+        abort(403)
+    filtros, error = leer_filtros_reporte(datos)
+    if error:
+        abort(400)
+    return respuesta_excel(filtros)
 
 # ======================================================
 # INSCRIPCIÓN — PROCESAR FORMULARIO MULTI-PASO
@@ -755,6 +954,11 @@ def inscripcion_submit():
     curp_regex = re.compile(r'^[A-Z]{4}\d{6}[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{2}$')
     if not curp_regex.match(curp):
         flash("La CURP no tiene el formato correcto.", "error")
+        return redirect(url_for('inscripcion'))
+
+    fecha_ok, resultado = validar_fecha_nacimiento(fecha_nac)
+    if not fecha_ok:
+        flash(resultado, "error")
         return redirect(url_for('inscripcion'))
 
     # ===== SUBIR ARCHIVOS A CLOUDINARY =====
@@ -1066,12 +1270,18 @@ def api_historial():
     return jsonify(ok=True, inscripciones=inscs, reinscripciones=reincs), 200
 
 
+def api_usuario_admin():
+    """Devuelve el usuario admin del token JWT, o None si no es administrador."""
+    user = collection.find_one({'matricula': get_jwt_identity()})
+    if not user or not user.get('es_admin'):
+        return None
+    return user
+
+
 @app.route('/api/admin/solicitudes', methods=['GET'])
 @jwt_required()
 def api_admin_solicitudes():
-    matricula = get_jwt_identity()
-    user = collection.find_one({'matricula': matricula})
-    if not user or not user.get('es_admin'):
+    if not api_usuario_admin():
         return jsonify(ok=False, mensaje="Acceso denegado."), 403
     inscs  = list(inscripciones_col.find({}, {'_id': 0}))
     reincs = list(reinscripciones_col.find({}, {'_id': 0}))
@@ -1081,42 +1291,59 @@ def api_admin_solicitudes():
 @app.route('/api/admin/actualizar_estatus', methods=['POST'])
 @jwt_required()
 def api_admin_actualizar_estatus():
-    matricula = get_jwt_identity()
-    user = collection.find_one({'matricula': matricula})
-    if not user or not user.get('es_admin'):
+    admin = api_usuario_admin()
+    if not admin:
         return jsonify(ok=False, mensaje="Acceso denegado."), 403
 
     data    = request.get_json(silent=True) or {}
-    folio   = data.get('folio', '')
-    tipo    = data.get('tipo', '')
-    estatus = data.get('estatus', '')
+    folio   = str(data.get('folio', '')).strip()
+    tipo    = str(data.get('tipo', '')).strip()
+    estatus = str(data.get('estatus', '')).strip()
 
     if not folio or not tipo or not estatus:
         return jsonify(ok=False, mensaje="Datos incompletos."), 400
 
-    col = inscripciones_col if tipo == 'inscripcion' else reinscripciones_col
-    result = col.update_one({'folio': folio}, {'$set': {'estatus': estatus}})
-    if result.matched_count == 0:
-        return jsonify(ok=False, mensaje="Folio no encontrado."), 404
+    ok, mensaje, codigo = aplicar_cambio_estatus(
+        tipo, folio, estatus, data.get('motivo', ''), admin['matricula'])
+    return jsonify(ok=ok, mensaje=mensaje), codigo
 
-    try:
-        solicitud = col.find_one({'folio': folio})
-        if solicitud:
-            alumno = collection.find_one({'matricula': solicitud.get('usuario', '')})
-            if alumno and alumno.get('email'):
-                asunto = f"Actualización de tu solicitud {folio}"
-                cuerpo = (
-                    f"<p>Hola <strong>{alumno.get('usuario','')}</strong>,</p>"
-                    f"<p>Tu solicitud <strong>{folio}</strong> fue actualizada a: <strong>{estatus}</strong>.</p>"
-                    f"<p>Visita: <a href=\"https://inscripciones-8f4j.onrender.com\">inscripciones-8f4j.onrender.com</a></p>"
-                    f"<p>Saludos,<br>Control Escolar UTSC</p>"
-                )
-                enviar_email(alumno['email'], asunto, cuerpo)
-    except Exception as e:
-        print(f"Error enviando correo: {e}")
 
-    return jsonify(ok=True, mensaje=f"Estatus actualizado a {estatus}."), 200
+@app.route('/api/admin/dashboard', methods=['GET'])
+@jwt_required()
+def api_admin_dashboard():
+    if not api_usuario_admin():
+        return jsonify(ok=False, mensaje="Acceso denegado."), 403
+    stats = estadisticas_dashboard(request.args.get('estatus', 'Todas'))
+    return jsonify(ok=True, **stats), 200
 
+
+@app.route('/api/admin/reportes/enlace', methods=['POST'])
+@jwt_required()
+def api_admin_reporte_enlace():
+    admin = api_usuario_admin()
+    if not admin:
+        return jsonify(ok=False, mensaje="Acceso denegado."), 403
+    filtros, error = leer_filtros_reporte(request.get_json(silent=True) or {})
+    if error:
+        return jsonify(ok=False, mensaje=error), 400
+
+    inscs, reincs = datos_reporte(filtros)
+    payload = {
+        "admin"  : admin['matricula'],
+        "tipo"   : filtros["tipo"],
+        "estatus": filtros["estatus"],
+        "carrera": filtros["carrera"],
+        "desde"  : filtros["desde"].isoformat() if filtros["desde"] else "",
+        "hasta"  : filtros["hasta"].isoformat() if filtros["hasta"] else "",
+    }
+    token = reporte_serializer.dumps(payload)
+    return jsonify(
+        ok=True,
+        url=url_externa('descargar_reporte', token=token),
+        expira_minutos=REPORTE_ENLACE_SEGUNDOS // 60,
+        inscripciones=len(inscs),
+        reinscripciones=len(reincs),
+    ), 200
 
 
 @app.route('/api/recuperar_contrasena', methods=['POST'])

@@ -6,6 +6,7 @@
     <title>Mi Historial | UTSC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_extra.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
     <style>
@@ -125,6 +126,11 @@
                                     <span class="badge badge-aprobada"><i class="fas fa-check"></i> Aprobada</span>
                                 {% elif ins.estatus == 'Rechazada' %}
                                     <span class="badge badge-rechazada"><i class="fas fa-times"></i> Rechazada</span>
+                                    {% if ins.motivo_rechazo %}
+                                    <div class="motivo-rechazo"><strong>Motivo:</strong> {{ ins.motivo_rechazo }}</div>
+                                    {% else %}
+                                    <div class="motivo-rechazo sin-motivo">No se registró un motivo. Comunícate con Control Escolar.</div>
+                                    {% endif %}
                                 {% else %}
                                     <span class="badge badge-revision"><i class="fas fa-clock"></i> En revisión</span>
                                 {% endif %}
@@ -180,6 +186,11 @@
                                     <span class="badge badge-aprobada"><i class="fas fa-check"></i> Aprobada</span>
                                 {% elif rei.estatus == 'Rechazada' %}
                                     <span class="badge badge-rechazada"><i class="fas fa-times"></i> Rechazada</span>
+                                    {% if rei.motivo_rechazo %}
+                                    <div class="motivo-rechazo"><strong>Motivo:</strong> {{ rei.motivo_rechazo }}</div>
+                                    {% else %}
+                                    <div class="motivo-rechazo sin-motivo">No se registró un motivo. Comunícate con Control Escolar.</div>
+                                    {% endif %}
                                 {% else %}
                                     <span class="badge badge-revision"><i class="fas fa-clock"></i> En revisión</span>
                                 {% endif %}

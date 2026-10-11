@@ -1,0 +1,6 @@
+{# Sub-menú del administrador. Antes de incluirlo: {% set seccion = 'solicitudes' | 'dashboard' | 'reportes' %} #}
+<div class="admin-subnav">
+    <a href="/admin" class="{{ 'active' if seccion == 'solicitudes' }}"><i class="fas fa-list-check"></i> Solicitudes</a>
+    <a href="/admin/dashboard" class="{{ 'active' if seccion == 'dashboard' }}"><i class="fas fa-chart-pie"></i> Dashboard</a>
+    <a href="/admin/reportes" class="{{ 'active' if seccion == 'reportes' }}"><i class="fas fa-file-excel"></i> Reportes</a>
+</div>

@@ -6,6 +6,7 @@
     <title>Inscripción | UTSC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_extra.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
     <style>
@@ -120,6 +121,7 @@
             </div>
         </div>
 
+        {% include '_flash.html' %}
         <form action="/inscripcion_submit" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="tipo_tramite" value="inscripcion">
 
@@ -146,6 +148,8 @@
                 <div class="form-group">
                     <label>Fecha de Nacimiento <span style="color:red">*</span></label>
                     <input type="date" name="fecha_nacimiento" id="fecha_nacimiento">
+                    <small style="color:#888;">Debes tener al menos 18 años cumplidos para inscribirte.</small>
+                    <div id="err-fecha" style="color:#c0392b; font-size:0.8rem; margin-top:4px; display:none;"></div>
                 </div>
                 <div class="form-group">
                     <label>Teléfono de Contacto <span style="color:red">*</span></label>
@@ -270,7 +274,47 @@
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 let pasoActual = 1;
-document.getElementById('fecha_nacimiento').max = new Date().toISOString().split('T')[0];
+const EDAD_MINIMA = 18;
+const EDAD_MAXIMA = 100;
+
+function fechaISOLocal(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+// El selector de fecha solo permite personas con 18 a 100 años cumplidos
+(function () {
+    const hoy = new Date();
+    const campo = document.getElementById('fecha_nacimiento');
+    campo.max = fechaISOLocal(new Date(hoy.getFullYear() - EDAD_MINIMA, hoy.getMonth(), hoy.getDate()));
+    campo.min = fechaISOLocal(new Date(hoy.getFullYear() - EDAD_MAXIMA, hoy.getMonth(), hoy.getDate()));
+})();
+
+// Devuelve '' si la fecha es válida; si no, el mensaje de error.
+function errorFechaNacimiento(valor) {
+    if (!valor) return 'Ingresa tu fecha de nacimiento.';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return 'La fecha de nacimiento no es válida.';
+    const [a, m, d] = valor.split('-').map(Number);
+    const hoy = new Date();
+    const fn = new Date(a, m - 1, d);
+    if (fn.getFullYear() !== a || fn.getMonth() !== m - 1 || fn.getDate() !== d) return 'La fecha de nacimiento no es válida.';
+    if (fn > hoy) return 'La fecha de nacimiento no puede ser futura.';
+    let edad = hoy.getFullYear() - a;
+    if ((hoy.getMonth() + 1) < m || ((hoy.getMonth() + 1) === m && hoy.getDate() < d)) edad--;
+    if (edad < EDAD_MINIMA) return 'Debes tener al menos ' + EDAD_MINIMA + ' años cumplidos para inscribirte.';
+    if (edad > EDAD_MAXIMA) return 'La fecha de nacimiento no es válida.';
+    return '';
+}
+
+function mostrarErrorFecha() {
+    const campo = document.getElementById('fecha_nacimiento');
+    const caja = document.getElementById('err-fecha');
+    const error = campo.value ? errorFechaNacimiento(campo.value) : '';
+    caja.textContent = error;
+    caja.style.display = error ? 'block' : 'none';
+    campo.style.borderColor = error ? '#c0392b' : '';
+    return error;
+}
+document.getElementById('fecha_nacimiento').addEventListener('input', mostrarErrorFecha);
+document.getElementById('fecha_nacimiento').addEventListener('change', mostrarErrorFecha);
 
 function irPaso(destino) {
     if (destino > pasoActual && !validarPaso(pasoActual)) return;
@@ -300,7 +344,8 @@ function validarPaso(paso) {
     if (paso === 1) {
         if (document.getElementById('nombre').value.trim().length < 10)  { alert('Ingresa tu nombre completo (mínimo 10 caracteres).'); return false; }
         if (!validarCurpFormato())  { alert('La CURP no tiene el formato correcto. Revisa el campo CURP.'); return false; }
-        if (!document.getElementById('fecha_nacimiento').value)          { alert('Ingresa tu fecha de nacimiento.'); return false; }
+        const errFecha = errorFechaNacimiento(document.getElementById('fecha_nacimiento').value);
+        if (errFecha) { mostrarErrorFecha(); alert(errFecha); return false; }
         if (document.getElementById('telefono').value.trim().length !== 10) { alert('El teléfono debe tener 10 dígitos.'); return false; }
         if (!document.getElementById('fotografia').files.length)         { alert('Sube tu fotografía.'); return false; }
     }
@@ -405,6 +450,7 @@ async function consultarCURPapi(curp, indicador) {
                 if (partes.length === 3) {
                     campoFecha.value = partes[2] + '-' + partes[1].padStart(2,'0') + '-' + partes[0].padStart(2,'0');
                     campoFecha.style.background = '#e8f5e9';
+                    mostrarErrorFecha();
                 }
             }
         } else if (data.valida === false) {

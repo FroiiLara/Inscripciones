@@ -1,0 +1,99 @@
+/* ==========================================================
+   admin_extra.css — Dashboard, Reportes y motivo de rechazo
+   Usa las variables --nl-green / --nl-orange de index.css
+   ========================================================== */
+
+/* ---- Mensajes flash ---- */
+.flash { padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 0.92rem; }
+.flash-success { background: #e8f5e9; color: #1b5e20; border-left: 4px solid #2e7d32; }
+.flash-error   { background: #ffebee; color: #b71c1c; border-left: 4px solid #c62828; }
+
+/* ---- Sub-navegación del administrador ---- */
+.admin-subnav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; border-bottom: 2px solid #e6e6e6; }
+.admin-subnav a {
+    padding: 10px 18px; text-decoration: none; color: #555; font-weight: 600; font-size: 0.92rem;
+    border-bottom: 3px solid transparent; margin-bottom: -2px;
+}
+.admin-subnav a:hover  { color: var(--nl-green); }
+.admin-subnav a.active { color: var(--nl-green); border-bottom-color: var(--nl-orange); }
+
+/* ---- Contenedor ancho para dashboard / reportes ---- */
+.card.card-wide { max-width: 1150px; }
+
+/* ---- Filtro del dashboard ---- */
+.dash-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.dash-toolbar select { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; }
+.dash-meta { color: #888; font-size: 0.8rem; }
+
+/* ---- Indicadores (KPI) ---- */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 26px; }
+.kpi { background: #fff; border: 1px solid #e3e3e3; border-radius: 10px; padding: 14px 16px; border-top: 4px solid var(--nl-green); }
+.kpi .kpi-num { font-size: 1.8rem; font-weight: 700; color: var(--nl-green); line-height: 1.1; }
+.kpi .kpi-lbl { font-size: 0.78rem; color: #666; margin-top: 4px; }
+.kpi.kpi-orange { border-top-color: var(--nl-orange); }
+.kpi.kpi-orange .kpi-num { color: var(--nl-orange); }
+.kpi .kpi-txt { font-size: 0.95rem; font-weight: 700; color: var(--nl-green); line-height: 1.3; }
+
+/* ---- Gráficas ---- */
+.chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 26px; }
+.chart-box { background: #fff; border: 1px solid #e3e3e3; border-radius: 10px; padding: 16px; min-width: 0; }
+.chart-box h3 { margin: 0 0 12px; font-size: 0.98rem; color: var(--nl-green); }
+.chart-box.full { grid-column: 1 / -1; }
+.chart-wrap { position: relative; height: 290px; }
+.chart-wrap.tall { height: 340px; }
+.chart-vacio { text-align: center; color: #999; font-style: italic; padding: 60px 0; }
+@media (max-width: 800px) { .chart-grid { grid-template-columns: 1fr; } }
+
+/* ---- Tabla resumen por carrera ---- */
+.tabla-resumen { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.tabla-resumen th { background: var(--nl-green); color: #fff; padding: 9px 12px; text-align: left; }
+.tabla-resumen td { padding: 9px 12px; border-bottom: 1px solid #e6e6e6; }
+.tabla-resumen td.num, .tabla-resumen th.num { text-align: right; }
+.tabla-resumen tfoot td { font-weight: 700; background: #f3f6f6; }
+
+/* ---- Reportes ---- */
+.rep-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.rep-filtros label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--nl-green); margin-bottom: 4px; }
+.rep-filtros select, .rep-filtros input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; }
+.rep-tipos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.rep-tipo { display: block; border: 2px solid #dcdcdc; border-radius: 10px; padding: 14px 16px; cursor: pointer; background: #fff; }
+.rep-tipo:hover { border-color: var(--nl-green); }
+.rep-tipo input { margin-right: 8px; accent-color: var(--nl-green); }
+.rep-tipo.sel { border-color: var(--nl-green); background: #f1f7f6; }
+.rep-tipo .rep-titulo { font-weight: 700; color: var(--nl-green); }
+.rep-tipo .rep-desc { display: block; font-size: 0.8rem; color: #666; margin-top: 4px; }
+.btn-excel {
+    background: #1d6f42; color: #fff; border: none; border-radius: 8px; padding: 12px 26px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+}
+.btn-excel:hover { background: #155230; }
+
+/* ---- Motivo de rechazo ---- */
+.motivo-rechazo {
+    margin-top: 6px; padding: 6px 9px; background: #ffebee; border-left: 3px solid #c62828;
+    color: #8e1b1b; font-size: 0.76rem; max-width: 260px; white-space: normal; line-height: 1.35;
+}
+.motivo-rechazo.sin-motivo { background: #f5f5f5; border-left-color: #aaa; color: #666; font-style: italic; }
+
+/* ---- Ventana (modal) para rechazar ---- */
+.modal-fondo {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none;
+    align-items: center; justify-content: center; z-index: 2000; padding: 16px;
+}
+.modal-fondo.abierto { display: flex; }
+.modal-caja { background: #fff; border-radius: 12px; width: 100%; max-width: 480px; padding: 24px; box-shadow: 0 15px 40px rgba(0,0,0,0.3); }
+.modal-caja h3 { margin: 0 0 4px; color: #c62828; }
+.modal-caja .modal-sub { margin: 0 0 14px; color: #666; font-size: 0.85rem; }
+.modal-caja textarea { width: 100%; box-sizing: border-box; min-height: 100px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 0.92rem; resize: vertical; }
+.modal-caja .contador { text-align: right; font-size: 0.75rem; color: #888; margin-top: 2px; }
+.modal-sugerencias { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.modal-sugerencias button {
+    border: 1px solid var(--nl-green); background: #fff; color: var(--nl-green); border-radius: 20px;
+    padding: 4px 11px; font-size: 0.75rem; cursor: pointer;
+}
+.modal-sugerencias button:hover { background: var(--nl-green); color: #fff; }
+.modal-acciones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.modal-acciones .btn-cancelar { background: #eee; color: #333; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; }
+.modal-acciones .btn-confirmar { background: #c62828; color: #fff; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; font-weight: 700; }
+.modal-acciones .btn-confirmar:hover { background: #8b0000; }
+.modal-error { color: #c62828; font-size: 0.8rem; margin-top: 6px; display: none; }

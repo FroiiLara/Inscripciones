@@ -6,6 +6,7 @@
     <title>Panel Administrador | UTSC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_extra.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
     <style>
@@ -153,6 +154,9 @@
             <span class="badge-admin">Control Escolar</span>
         </div>
 
+        {% set seccion = 'solicitudes' %}{% include '_admin_subnav.html' %}
+        {% include '_flash.html' %}
+
         <!-- ESTADÍSTICAS -->
         <div class="stats-bar">
             <div class="stat-card">
@@ -229,6 +233,11 @@
                                     <span class="badge badge-aprobada"><i class="fas fa-check"></i> Aprobada</span>
                                 {% elif ins.estatus == 'Rechazada' %}
                                     <span class="badge badge-rechazada"><i class="fas fa-times"></i> Rechazada</span>
+                                    {% if ins.motivo_rechazo %}
+                                    <div class="motivo-rechazo"><i class="fas fa-comment-dots"></i> {{ ins.motivo_rechazo }}</div>
+                                    {% else %}
+                                    <div class="motivo-rechazo sin-motivo">Sin motivo registrado</div>
+                                    {% endif %}
                                 {% else %}
                                     <span class="badge badge-revision"><i class="fas fa-clock"></i> En revisión</span>
                                 {% endif %}
@@ -243,14 +252,11 @@
                                         <i class="fas fa-check"></i> Aprobar
                                     </button>
                                 </form>
-                                <form method="POST" action="/admin/actualizar_estatus" style="display:inline;">
-                                    <input type="hidden" name="folio" value="{{ ins.folio }}">
-                                    <input type="hidden" name="tipo" value="inscripcion">
-                                    <input type="hidden" name="estatus" value="Rechazada">
-                                    <button type="submit" class="btn-rechazar" onclick="return confirm('¿Rechazar esta inscripción?')">
-                                        <i class="fas fa-times"></i> Rechazar
-                                    </button>
-                                </form>
+                                <button type="button" class="btn-rechazar"
+                                        data-folio="{{ ins.folio }}" data-tipo="inscripcion" data-etiqueta="inscripción"
+                                        onclick="abrirRechazo(this)">
+                                    <i class="fas fa-times"></i> Rechazar
+                                </button>
                                 {% else %}
                                 <span style="color:#999;font-size:0.8rem;">Sin acciones</span>
                                 {% endif %}
@@ -316,6 +322,11 @@
                                     <span class="badge badge-aprobada"><i class="fas fa-check"></i> Aprobada</span>
                                 {% elif rei.estatus == 'Rechazada' %}
                                     <span class="badge badge-rechazada"><i class="fas fa-times"></i> Rechazada</span>
+                                    {% if rei.motivo_rechazo %}
+                                    <div class="motivo-rechazo"><i class="fas fa-comment-dots"></i> {{ rei.motivo_rechazo }}</div>
+                                    {% else %}
+                                    <div class="motivo-rechazo sin-motivo">Sin motivo registrado</div>
+                                    {% endif %}
                                 {% else %}
                                     <span class="badge badge-revision"><i class="fas fa-clock"></i> En revisión</span>
                                 {% endif %}
@@ -330,14 +341,11 @@
                                         <i class="fas fa-check"></i> Aprobar
                                     </button>
                                 </form>
-                                <form method="POST" action="/admin/actualizar_estatus" style="display:inline;">
-                                    <input type="hidden" name="folio" value="{{ rei.folio }}">
-                                    <input type="hidden" name="tipo" value="reinscripcion">
-                                    <input type="hidden" name="estatus" value="Rechazada">
-                                    <button type="submit" class="btn-rechazar" onclick="return confirm('¿Rechazar esta reinscripción?')">
-                                        <i class="fas fa-times"></i> Rechazar
-                                    </button>
-                                </form>
+                                <button type="button" class="btn-rechazar"
+                                        data-folio="{{ rei.folio }}" data-tipo="reinscripcion" data-etiqueta="reinscripción"
+                                        onclick="abrirRechazo(this)">
+                                    <i class="fas fa-times"></i> Rechazar
+                                </button>
                                 {% else %}
                                 <span style="color:#999;font-size:0.8rem;">Sin acciones</span>
                                 {% endif %}
@@ -352,6 +360,32 @@
             {% endif %}
         </div>
 
+    </div>
+</div>
+
+<!-- MODAL: MOTIVO DE RECHAZO -->
+<div class="modal-fondo" id="modalRechazo" onclick="if(event.target===this)cerrarRechazo()">
+    <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+        <h3 id="modalTitulo"><i class="fas fa-times-circle"></i> Rechazar solicitud</h3>
+        <p class="modal-sub">Folio <strong id="modalFolio"></strong>. El alumno verá este motivo al consultar su trámite y le llegará por correo.</p>
+        <form method="POST" action="/admin/actualizar_estatus" id="formRechazo" onsubmit="return validarRechazo()">
+            <input type="hidden" name="folio" id="rechFolio">
+            <input type="hidden" name="tipo" id="rechTipo">
+            <input type="hidden" name="estatus" value="Rechazada">
+            <div class="modal-sugerencias">
+                <button type="button" onclick="usarSugerencia(this)">El acta de nacimiento no es actualizada</button>
+                <button type="button" onclick="usarSugerencia(this)">Documento ilegible o incompleto</button>
+                <button type="button" onclick="usarSugerencia(this)">El comprobante de pago no es válido</button>
+                <button type="button" onclick="usarSugerencia(this)">La fotografía no cumple con los requisitos</button>
+            </div>
+            <textarea name="motivo" id="rechMotivo" maxlength="500" placeholder="Escribe el motivo del rechazo..." required></textarea>
+            <div class="contador"><span id="rechContador">0</span>/500</div>
+            <div class="modal-error" id="rechError">Escribe un motivo de al menos 5 caracteres.</div>
+            <div class="modal-acciones">
+                <button type="button" class="btn-cancelar" onclick="cerrarRechazo()">Cancelar</button>
+                <button type="submit" class="btn-confirmar"><i class="fas fa-times"></i> Rechazar solicitud</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -377,7 +411,34 @@ function showTab(tab) {
     document.getElementById('tab-' + tab).classList.add('active');
     event.target.classList.add('active');
 }
-function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('active'); }
+function toggleMenu() { var m = document.getElementById('mobileMenu'); if (m) m.classList.toggle('active'); }
+
+/* ---- Rechazo con motivo ---- */
+const modalRechazo = document.getElementById('modalRechazo');
+const campoMotivo  = document.getElementById('rechMotivo');
+function abrirRechazo(btn) {
+    document.getElementById('rechFolio').value = btn.dataset.folio;
+    document.getElementById('rechTipo').value  = btn.dataset.tipo;
+    document.getElementById('modalFolio').textContent = btn.dataset.folio + ' (' + btn.dataset.etiqueta + ')';
+    campoMotivo.value = '';
+    actualizarContador();
+    document.getElementById('rechError').style.display = 'none';
+    modalRechazo.classList.add('abierto');
+    campoMotivo.focus();
+}
+function cerrarRechazo() { modalRechazo.classList.remove('abierto'); }
+function usarSugerencia(btn) { campoMotivo.value = btn.textContent.trim(); actualizarContador(); campoMotivo.focus(); }
+function actualizarContador() { document.getElementById('rechContador').textContent = campoMotivo.value.length; }
+campoMotivo.addEventListener('input', actualizarContador);
+function validarRechazo() {
+    if (campoMotivo.value.trim().length < 5) {
+        document.getElementById('rechError').style.display = 'block';
+        campoMotivo.focus();
+        return false;
+    }
+    return true;
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrarRechazo(); });
 </script>
 <script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
 </body>
