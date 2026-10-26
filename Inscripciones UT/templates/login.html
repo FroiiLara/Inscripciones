@@ -107,22 +107,7 @@
         </form>
     </div>
 
-    <script>
-        // Toggle mostrar/ocultar contraseña
-        const togglePassword = document.getElementById('togglePassword');
-        const passwordField  = document.getElementById('password');
-        if (togglePassword && passwordField) {
-            togglePassword.addEventListener('click', function () {
-                const hidden = passwordField.type === 'password';
-                passwordField.type = hidden ? 'text' : 'password';
-                const icon = this.querySelector('i');
-                if (icon) {
-                    icon.classList.toggle('fa-eye',       !hidden);
-                    icon.classList.toggle('fa-eye-slash',  hidden);
-                }
-            });
-        }
-    </script>
+    <!-- El ojito de la contraseña lo maneja static/app.js -->
 
 <script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
 </body>
