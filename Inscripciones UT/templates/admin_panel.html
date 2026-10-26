@@ -245,6 +245,7 @@
                             <td>
                                 {% if ins.estatus == 'En revisión' %}
                                 <form method="POST" action="/admin/actualizar_estatus" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <input type="hidden" name="folio" value="{{ ins.folio }}">
                                     <input type="hidden" name="tipo" value="inscripcion">
                                     <input type="hidden" name="estatus" value="Aprobada">
@@ -334,6 +335,7 @@
                             <td>
                                 {% if rei.estatus == 'En revisión' %}
                                 <form method="POST" action="/admin/actualizar_estatus" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <input type="hidden" name="folio" value="{{ rei.folio }}">
                                     <input type="hidden" name="tipo" value="reinscripcion">
                                     <input type="hidden" name="estatus" value="Aprobada">
@@ -369,6 +371,7 @@
         <h3 id="modalTitulo"><i class="fas fa-times-circle"></i> Rechazar solicitud</h3>
         <p class="modal-sub">Folio <strong id="modalFolio"></strong>. El alumno verá este motivo al consultar su trámite y le llegará por correo.</p>
         <form method="POST" action="/admin/actualizar_estatus" id="formRechazo" onsubmit="return validarRechazo()">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="folio" id="rechFolio">
             <input type="hidden" name="tipo" id="rechTipo">
             <input type="hidden" name="estatus" value="Rechazada">

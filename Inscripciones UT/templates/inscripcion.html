@@ -123,6 +123,7 @@
 
         {% include '_flash.html' %}
         <form action="/inscripcion_submit" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="tipo_tramite" value="inscripcion">
 
             <!-- PASO 1 -->
@@ -144,6 +145,12 @@
                     </div>
                     <!-- Indicador validación CURP en RENAPO -->
                     <div id="curp-status" style="font-size:0.82rem; margin-top:4px; min-height:20px;"></div>
+                    <label class="curp-consent" style="display:flex; gap:8px; align-items:flex-start; font-size:0.8rem; color:#555; margin-top:6px; font-weight:400;">
+                        <input type="checkbox" id="curp-consent" onchange="validarCurp()" style="width:auto; margin-top:3px;">
+                        <span>Opcional: autorizo enviar <strong>únicamente mi CURP</strong> a un servicio externo
+                        (consultacurp.com.mx) para comprobar que existe. Si no lo autorizo, la CURP solo se valida
+                        por su formato y puedes continuar con la inscripción.</span>
+                    </label>
                 </div>
                 <div class="form-group">
                     <label>Fecha de Nacimiento <span style="color:red">*</span></label>
@@ -416,6 +423,13 @@ function validarCurp() {
     clearTimeout(curpTimer);
 
     if (curp.length < 18) {
+        if (indicador) indicador.innerHTML = '';
+        return;
+    }
+
+    // Privacidad: la CURP solo sale hacia el servicio externo si el alumno lo autoriza.
+    const consentimiento = document.getElementById('curp-consent');
+    if (!consentimiento || !consentimiento.checked) {
         if (indicador) indicador.innerHTML = '';
         return;
     }

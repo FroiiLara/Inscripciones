@@ -10,3 +10,4 @@ cloudinary
 dnspython
 flask-cors
 openpyxl
+Flask-Limiter

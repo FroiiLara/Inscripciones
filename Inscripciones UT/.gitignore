@@ -50,3 +50,13 @@ ENV/
 .env
 *.env
 sendgrid.env
+
+# Más secretos que nunca deben subirse al repositorio
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.keystore
+key.properties
+service-account*.json

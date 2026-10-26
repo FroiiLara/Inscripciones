@@ -131,8 +131,10 @@
             </div>
         </div>
 
+        {% include '_flash.html' %}
         <!-- FORMULARIO -->
         <form action="/reinscripcion_submit" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="tipo_tramite" value="reinscripcion">
 
             <!-- PASO 1: Datos del Alumno -->

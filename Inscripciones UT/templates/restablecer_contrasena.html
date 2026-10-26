@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recuperar Contraseña</title>
+    <title>Nueva contraseña</title>
 
-    <link rel="stylesheet" href="../static/css/contrasena.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/restablecer.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -14,47 +14,69 @@
 <body>
 
     <div class="container">
-        <div class="card">
-            
-            <h2>Recuperar Contraseña</h2>
-            <p class="subtitle">
-                Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
+        <h1>Nueva contraseña</h1>
+        <p style="margin-top:0;">Escribe tu nueva contraseña. Este enlace solo se puede usar una vez.</p>
+
+        {% with messages = get_flashed_messages(category_filter=['success', 'error']) %}
+            {% if messages %}
+                <div class="flash-message">
+                    {{ messages[0] }}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <div class="form-group">
+                <i class="fas fa-lock icon"></i>
+                <input
+                    type="password"
+                    id="nueva_contrasena"
+                    name="nueva_contrasena"
+                    placeholder="Nueva contraseña"
+                    required
+                    minlength="8"
+                    maxlength="72"
+                    autocomplete="new-password"
+                    pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,72}"
+                    title="De 8 a 72 caracteres, con mayúscula, minúscula, número y símbolo."
+                >
+                <span class="toggle-password" data-target="nueva_contrasena"></span>
+            </div>
+
+            <div class="form-group">
+                <i class="fas fa-lock icon"></i>
+                <input
+                    type="password"
+                    id="confirmar_contrasena"
+                    name="confirmar_contrasena"
+                    placeholder="Confirma la contraseña"
+                    required
+                    maxlength="72"
+                    autocomplete="new-password"
+                >
+                <span class="toggle-password" data-target="confirmar_contrasena"></span>
+            </div>
+
+            <p style="margin:0 0 16px; font-size:0.8rem;">
+                Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo.
             </p>
 
-            {% with messages = get_flashed_messages(category_filter=['success', 'error']) %}
-                {% if messages %}
-                    <div class="flash-message">
-                        {{ messages[0] }}
-                    </div>
-                {% endif %}
-            {% endwith %}
+            <button type="submit">Guardar contraseña</button>
+        </form>
 
-            <form action="{{ url_for('recuperar_contrasena') }}" method="POST">
-                <div class="form-group">
-                    <i class="fas fa-envelope"></i>
-                    <input 
-                        type="email" 
-                        name="email" 
-                        placeholder="ejemplo@virtual.utsc.edu.mx" 
-                        required
-                        maxlength="50"
-                        pattern="[a-zA-Z0-9._%+-]+@vitual\.utsc\.edu\.mx"
-                        title="Por favor, ingresa un correo institucional válido terminado en @utsc.edu.mx"
-                        style="text-transform: lowercase;"
-                    >
-                </div>
-
-                <button type="submit" class="btn-primary">
-                    Enviar enlace
-                </button>
-            </form>
-
-            <a href="{{ url_for('login') }}" class="back-link">
-                <i class="fas fa-arrow-left"></i> Volver al inicio de sesión
-            </a>
-        </div>
+        <p><a href="{{ url_for('login') }}">Volver al inicio de sesión</a></p>
     </div>
 
+<script>
+    document.querySelectorAll('.toggle-password').forEach(function (ojo) {
+        ojo.addEventListener('click', function () {
+            var campo = document.getElementById(ojo.dataset.target);
+            var visible = campo.type === 'text';
+            campo.type = visible ? 'password' : 'text';
+            ojo.classList.toggle('active', !visible);
+        });
+    });
+</script>
 <script src="{{ url_for('static', filename='js/registrar_sw.js') }}"></script>
 </body>
 </html>

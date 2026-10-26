@@ -2,9 +2,12 @@ import os
 import re
 import uuid
 import json
+import calendar
 from datetime import timedelta, datetime
 
-MAX_INTENTOS = 3
+# Bloqueo por intentos fallidos de inicio de sesión (ver sección "CONTROL DE INTENTOS")
+MAX_INTENTOS_IP        = 5     # fallos por pareja (matrícula + dirección IP) antes de bloquear
+MAX_INTENTOS_CUENTA    = 15    # fallos desde cualquier IP antes de bloquear la cuenta completa
 TIEMPO_BLOQUEO_MINUTOS = 15
 
 from dotenv import load_dotenv
@@ -21,6 +24,11 @@ from sendgrid.helpers.mail import Mail
 from itsdangerous import URLSafeTimedSerializer as Serializer, BadSignature, SignatureExpired
 from werkzeug.utils import secure_filename
 from markupsafe import escape
+from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
+from pymongo.errors import DuplicateKeyError
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 import reportes   # estadísticas del dashboard y exportación a Excel
 
@@ -31,6 +39,9 @@ import cloudinary.uploader
 from flask_jwt_extended import (
     JWTManager,
     create_access_token,
+    create_refresh_token,
+    decode_token,
+    get_jwt,
     jwt_required,
     get_jwt_identity,
     set_access_cookies,
@@ -47,25 +58,84 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY")
 
-# ── CORS para la app móvil Flutter ────────────────────────
+# Render (y cualquier proxy inverso) envía la IP real del cliente en X-Forwarded-For.
+# Sin esto, el límite de intentos vería siempre la IP del proxy.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+ES_PRODUCCION = (os.environ.get('FLASK_ENV', 'production') != 'development'
+                 and os.environ.get('DEBUG', '').lower() != 'true')
+
+# Las claves deben existir y ser largas; si no, cualquiera podría falsificar sesiones.
+for _nombre in ("SECRET_KEY", "JWT_SECRET_KEY"):
+    _valor = os.environ.get(_nombre) or ""
+    if not _valor:
+        raise RuntimeError(f"Falta la variable de entorno {_nombre}.")
+    if len(_valor) < 32:
+        print(f"ADVERTENCIA: {_nombre} tiene menos de 32 caracteres; genera una más larga "
+              f"(python -c \"import secrets; print(secrets.token_hex(32))\").")
+
+# ── CORS ──────────────────────────────────────────────────
+# La app móvil no usa CORS (no es un navegador) y la web llama a /api desde el mismo
+# origen, así que por defecto NO se permite ningún origen externo.
+# Si algún día hay otro sitio web que deba consumir la API: CORS_ORIGINS="https://sitio1,https://sitio2"
+_cors_origenes = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 CORS(app, resources={
     r"/api/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "OPTIONS"],
+        "origins": _cors_origenes,
+        "methods": ["GET", "POST"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
 })
 
 bcrypt = Bcrypt(app)
 
+# ── Límite de tamaño de las peticiones (tope total; cada archivo se limita aparte) ──
+MAX_ARCHIVO_BYTES = 5 * 1024 * 1024            # 5 MB por documento
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
+
+# ── Cookie de sesión de Flask (la usan los mensajes flash) ──
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"]   = ES_PRODUCCION
+
 # ================= JWT CONFIG =================
-app.config["JWT_SECRET_KEY"]          = os.environ.get("JWT_SECRET_KEY")
-app.config["JWT_TOKEN_LOCATION"]      = ["cookies", "headers"]
-app.config["JWT_ACCESS_COOKIE_PATH"]  = "/"
-app.config["JWT_COOKIE_CSRF_PROTECT"] = False   # En producción activar: True
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
+app.config["JWT_SECRET_KEY"]            = os.environ.get("JWT_SECRET_KEY")
+app.config["JWT_TOKEN_LOCATION"]        = ["cookies", "headers"]
+app.config["JWT_ACCESS_COOKIE_PATH"]    = "/"
+# Cookies del navegador: solo HTTPS, no accesibles desde JavaScript y nunca enviadas
+# desde otro sitio (SameSite=Strict) + token CSRF obligatorio en cada formulario POST.
+app.config["JWT_COOKIE_SECURE"]         = ES_PRODUCCION
+app.config["JWT_COOKIE_SAMESITE"]       = "Strict"
+app.config["JWT_COOKIE_CSRF_PROTECT"]   = True
+app.config["JWT_CSRF_CHECK_FORM"]       = True
+app.config["JWT_ACCESS_CSRF_FIELD_NAME"] = "csrf_token"
+# Vida de los tokens: la app móvil usa un access token corto + refresh token que rota;
+# el navegador usa un access token más largo en cookie.
+ACCESS_MOVIL_MINUTOS = 15
+ACCESS_WEB_MINUTOS   = 60
+REFRESH_DIAS         = 14
+app.config["JWT_ACCESS_TOKEN_EXPIRES"]  = timedelta(minutes=ACCESS_MOVIL_MINUTOS)
+app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=REFRESH_DIAS)
 
 jwt = JWTManager(app)
+
+# ================= LÍMITE DE PETICIONES =================
+# Almacén en memoria: suficiente para una sola instancia (Render con un proceso).
+# Si se escala a varias instancias, usar RATELIMIT_STORAGE_URI=redis://...
+app.config["RATELIMIT_ENABLED"] = os.environ.get("RATELIMIT_ENABLED", "true").lower() != "false"
+limiter = Limiter(
+    get_remote_address, app=app,
+    storage_uri=os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
+    default_limits=[], headers_enabled=False,
+)
+# Límites por IP. Ojo: en la universidad muchos alumnos comparten la misma IP (Wi-Fi del
+# plantel), por eso son holgados; el freno real a adivinar contraseñas es el bloqueo por
+# matrícula + IP de verificar_credenciales().
+LIMITE_LOGIN      = os.environ.get("LIMITE_LOGIN",      "30 per minute; 400 per hour")
+LIMITE_REGISTRO   = os.environ.get("LIMITE_REGISTRO",   "30 per hour")
+LIMITE_RECUPERAR  = os.environ.get("LIMITE_RECUPERAR",  "10 per hour")
+LIMITE_TRAMITES   = os.environ.get("LIMITE_TRAMITES",   "60 per hour")
+LIMITE_REFRESH    = os.environ.get("LIMITE_REFRESH",    "60 per hour")
 
 # ======================================================
 # SECURITY HEADERS — Correcciones del escáner de vulnerabilidades
@@ -134,11 +204,22 @@ def security_txt():
 # API 1 — VALIDACIÓN CURP (RENAPO via consultacurp.com.mx)
 # ======================================================
 
+# PRIVACIDAD: esta consulta envía la CURP del alumno a un servicio de terceros
+# (api.consultacurp.com.mx). Por eso (1) el formulario web y la app solo la hacen si el
+# alumno lo autoriza con una casilla, (2) solo se envía la CURP, nunca otros datos, y
+# (3) se puede desactivar por completo con CURP_VALIDACION_EXTERNA=false.
+CURP_VALIDACION_EXTERNA = os.environ.get("CURP_VALIDACION_EXTERNA", "true").lower() != "false"
+
+
 @app.route('/api/validar_curp/<curp>', methods=['GET'])
+@limiter.limit(LIMITE_TRAMITES)
 @jwt_required()
 def api_validar_curp(curp):
     """Valida que una CURP exista en el registro nacional (RENAPO)."""
     import urllib.request
+
+    if not CURP_VALIDACION_EXTERNA:
+        return {'valida': None, 'mensaje': 'La verificación externa de la CURP está desactivada.'}, 503
 
     curp = curp.strip().upper()
 
@@ -172,7 +253,7 @@ def api_validar_curp(curp):
             return {'valida': False, 'mensaje': 'CURP no encontrada en RENAPO.'}, 404
 
     except Exception as e:
-        print(f"Error consultando CURP API: {e}")
+        print(f"Error consultando CURP API: {type(e).__name__}")   # sin imprimir la CURP
         return {'valida': None, 'mensaje': 'No fue posible verificar la CURP en este momento.'}, 503
 
 
@@ -228,6 +309,21 @@ db        = client["Users"]
 collection         = db["Users"]
 inscripciones_col  = db["Inscripciones"]
 reinscripciones_col = db["Reinscripciones"]
+revocados_col      = db["tokens_revocados"]    # tokens JWT cerrados (logout / rotación)
+reportes_usados_col = db["reportes_usados"]    # enlaces de descarga de reportes ya usados
+login_intentos_col = db["login_intentos"]      # intentos fallidos por matrícula + IP
+
+
+def asegurar_indices():
+    """Índices TTL: MongoDB borra solo los registros de seguridad cuando ya no sirven."""
+    try:
+        revocados_col.create_index("expira", expireAfterSeconds=0)
+        reportes_usados_col.create_index("expira", expireAfterSeconds=0)
+        login_intentos_col.create_index("actualizado", expireAfterSeconds=24 * 3600)
+    except Exception as e:                                   # no impedir el arranque
+        print(f"No se pudieron crear los índices TTL: {e}")
+
+asegurar_indices()
 
 # ================= CLOUDINARY CONFIG =================
 cloudinary.config(
@@ -239,22 +335,62 @@ cloudinary.config(
 
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png'}
 
+# Firma ("magic bytes") con la que empieza cada tipo de archivo. Se comprueba el CONTENIDO real,
+# no solo la extensión, para que no se pueda subir un .exe o .html renombrado a .pdf.
+FIRMAS_ARCHIVO = {
+    'pdf' : (b'%PDF-',),
+    'jpg' : (b'\xff\xd8\xff',),
+    'jpeg': (b'\xff\xd8\xff',),
+    'png' : (b'\x89PNG\r\n\x1a\n',),
+}
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def subir_a_cloudinary(archivo, carpeta="inscripciones"):
-    """Sube un archivo a Cloudinary y devuelve la URL segura."""
-    if archivo and allowed_file(archivo.filename):
-        try:
-            resultado = cloudinary.uploader.upload(
-                archivo,
-                folder=carpeta,
-                resource_type="auto"   # acepta pdf, jpg, png
-            )
-            return resultado.get("secure_url")
-        except Exception as e:
-            print(f"Error al subir a Cloudinary: {e}")
+
+def validar_archivo(archivo, etiqueta, solo_imagen=False):
+    """Valida un archivo subido. Devuelve None si es correcto o el mensaje de error."""
+    if not archivo or not archivo.filename:
+        return f"Falta el archivo: {etiqueta}."
+    nombre = archivo.filename
+    if not allowed_file(nombre):
+        return f"{etiqueta}: solo se permiten archivos PDF, JPG o PNG."
+    ext = nombre.rsplit('.', 1)[1].lower()
+    if solo_imagen and ext == 'pdf':
+        return f"{etiqueta}: debe ser una imagen JPG o PNG."
+
+    flujo = archivo.stream
+    flujo.seek(0, os.SEEK_END)
+    tam = flujo.tell()
+    flujo.seek(0)
+    if tam == 0:
+        return f"{etiqueta}: el archivo está vacío."
+    if tam > MAX_ARCHIVO_BYTES:
+        return f"{etiqueta}: el archivo supera el máximo de {MAX_ARCHIVO_BYTES // (1024 * 1024)} MB."
+
+    cabecera = flujo.read(16)
+    flujo.seek(0)
+    if not any(cabecera.startswith(f) for f in FIRMAS_ARCHIVO[ext]):
+        return f"{etiqueta}: el contenido no corresponde a un archivo {ext.upper()} válido."
     return None
+
+
+def subir_documento(archivo, carpeta, etiqueta, solo_imagen=False):
+    """Valida y sube un documento a Cloudinary. Devuelve (url, None) o (None, mensaje_de_error)."""
+    error = validar_archivo(archivo, etiqueta, solo_imagen)
+    if error:
+        return None, error
+    try:
+        resultado = cloudinary.uploader.upload(
+            archivo,
+            folder=carpeta,
+            resource_type="auto",                      # acepta pdf, jpg, png
+            allowed_formats=["pdf", "jpg", "jpeg", "png"]   # Cloudinary rechaza cualquier otro
+        )
+        return resultado.get("secure_url"), None
+    except Exception as e:
+        print(f"Error al subir a Cloudinary: {e}")
+        return None, f"{etiqueta}: no se pudo subir el archivo. Intenta de nuevo."
 
 # ================= SENDGRID =================
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
@@ -319,6 +455,176 @@ def validar_no_sql_injection(dato):
     if "$" in str(dato): return False
     return True
 
+PASSWORD_REGEX = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,72}$'
+PASSWORD_MENSAJE = ("La contraseña debe tener entre 8 y 72 caracteres e incluir mayúscula, "
+                    "minúscula, número y símbolo.")
+
+def password_valida(contrasena):
+    """Política única de contraseñas (registro y restablecimiento).
+    El máximo de 72 es el límite real de bcrypt: más caracteres se ignorarían."""
+    return bool(re.fullmatch(PASSWORD_REGEX, contrasena or ""))
+
+
+def ip_cliente():
+    return get_remote_address() or "desconocida"
+
+
+# ======================================================
+# RESPUESTAS DE ERROR Y TOKENS JWT (sesiones revocables)
+# ======================================================
+
+def es_ruta_api():
+    return request.path.startswith('/api/')
+
+
+def respuesta_no_autenticado(codigo, mensaje):
+    """JSON para la app móvil (con un 'codigo' que la app usa para renovar el token);
+    para el navegador, volver al inicio de sesión."""
+    if es_ruta_api():
+        return jsonify(ok=False, codigo=codigo, mensaje=mensaje), 401
+    respuesta = redirect(url_for('login'))
+    unset_jwt_cookies(respuesta)
+    return respuesta
+
+
+def respuesta_csrf():
+    """Formulario sin token CSRF válido (página vieja o petición falsificada desde otro sitio).
+    La sesión NO se cierra: solo se rechaza esta petición."""
+    mensaje = "El formulario expiró o no es válido. Recarga la página e intenta de nuevo."
+    if es_ruta_api():
+        return jsonify(ok=False, codigo="csrf", mensaje=mensaje), 403
+    flash(mensaje, "error")
+    return redirect(request.referrer or url_for('pagina_principal'))
+
+
+@jwt.unauthorized_loader
+def jwt_falta_token(motivo):
+    # flask-jwt-extended reporta los fallos de CSRF (falta el token o no coincide) por aquí.
+    if "CSRF" in str(motivo):
+        return respuesta_csrf()
+    return respuesta_no_autenticado("sin_token", "Inicia sesión para continuar.")
+
+@jwt.invalid_token_loader
+def jwt_token_invalido(motivo):
+    if "CSRF" in str(motivo):
+        return respuesta_csrf()
+    return respuesta_no_autenticado("token_invalido", "Sesión inválida. Inicia sesión de nuevo.")
+
+@jwt.expired_token_loader
+def jwt_token_expirado(header, payload):
+    return respuesta_no_autenticado("token_expirado", "Tu sesión expiró. Inicia sesión de nuevo.")
+
+@jwt.revoked_token_loader
+def jwt_token_revocado(header, payload):
+    return respuesta_no_autenticado("token_revocado", "Tu sesión fue cerrada. Inicia sesión de nuevo.")
+
+
+@jwt.token_in_blocklist_loader
+def token_revocado(header, payload):
+    """True si el token ya se cerró (logout/rotación) o si es anterior a un cambio de contraseña."""
+    if revocados_col.find_one({"_id": payload["jti"]}):
+        return True
+    user = collection.find_one({"matricula": payload["sub"]}, {"sesiones_desde": 1})
+    if not user:
+        return True                      # cuenta eliminada: ningún token sigue siendo válido
+    desde = user.get("sesiones_desde")
+    # "<=": los tokens guardan la hora en segundos; así también cae el emitido en el mismo segundo.
+    if desde and payload.get("iat", 0) <= calendar.timegm(desde.utctimetuple()):
+        return True
+    return False
+
+
+def revocar_payload(payload):
+    """Agrega un token (su jti) a la lista de revocados hasta que expire."""
+    try:
+        revocados_col.insert_one({
+            "_id": payload["jti"],
+            "expira": datetime.utcfromtimestamp(payload["exp"]),
+        })
+    except DuplicateKeyError:
+        pass
+
+
+def cerrar_todas_las_sesiones(matricula):
+    """Invalida todos los tokens emitidos hasta este momento (p. ej. tras cambiar la contraseña)."""
+    collection.update_one({"matricula": matricula},
+                          {"$set": {"sesiones_desde": datetime.utcnow()}})
+
+
+def emitir_tokens_movil(user):
+    identidad = user['matricula']
+    return (create_access_token(identity=identidad),
+            create_refresh_token(identity=identidad))
+
+
+# ======================================================
+# CONTROL DE INTENTOS DE INICIO DE SESIÓN
+# ======================================================
+# Antes: 3 fallos bloqueaban la CUENTA completa, así que cualquiera podía dejar fuera a otro
+# alumno solo escribiendo su matrícula mal tres veces. Ahora el bloqueo es por pareja
+# (matrícula + IP): el atacante se bloquea a sí mismo, no al dueño de la cuenta.
+# Además hay un tope global por cuenta (muy alto) contra ataques desde muchas IP, y un
+# límite de peticiones por IP (Flask-Limiter) en las rutas de login.
+
+MENSAJE_LOGIN_FALLIDO = "Matrícula o contraseña incorrectos."
+# Hash falso: se compara también cuando la matrícula no existe, para que el tiempo de
+# respuesta no delate qué matrículas están registradas.
+_HASH_FALSO = bcrypt.generate_password_hash("contraseña-falsa-no-valida").decode('utf-8')
+
+
+def _minutos_restantes(fecha):
+    return max(1, int((fecha - datetime.utcnow()).total_seconds() // 60) + 1)
+
+
+def verificar_credenciales(matricula, contrasena):
+    """Devuelve (usuario, None) si las credenciales son correctas o (None, mensaje) si no.
+    El mensaje es siempre genérico para no revelar si la matrícula existe."""
+    ip    = ip_cliente()
+    clave = f"{matricula[:40]}|{ip}"
+    ahora = datetime.utcnow()
+
+    registro = login_intentos_col.find_one({"_id": clave}) or {}
+    if registro.get("bloqueado_hasta") and ahora < registro["bloqueado_hasta"]:
+        return None, (f"Demasiados intentos fallidos. Intenta de nuevo en "
+                      f"{_minutos_restantes(registro['bloqueado_hasta'])} minutos.")
+
+    user = collection.find_one({"matricula": matricula})
+    if user and user.get("bloqueado_hasta") and ahora < user["bloqueado_hasta"]:
+        return None, (f"Cuenta bloqueada temporalmente por actividad sospechosa. "
+                      f"Intenta de nuevo en {_minutos_restantes(user['bloqueado_hasta'])} minutos.")
+
+    hash_guardado = user['contrasena'] if user else _HASH_FALSO
+    correcta = bcrypt.check_password_hash(hash_guardado, contrasena)
+
+    if user and correcta:
+        login_intentos_col.delete_one({"_id": clave})
+        collection.update_one({"_id": user["_id"]},
+                              {"$set": {"intentos_fallidos": 0, "bloqueado_hasta": None}})
+        return user, None
+
+    # ── Fallo: contar por (matrícula + IP) ──
+    intentos = registro.get("intentos", 0) + 1
+    cambios = {"intentos": intentos, "actualizado": ahora}
+    if intentos >= MAX_INTENTOS_IP:
+        cambios["bloqueado_hasta"] = ahora + timedelta(minutes=TIEMPO_BLOQUEO_MINUTOS)
+        cambios["intentos"] = 0
+    login_intentos_col.update_one({"_id": clave}, {"$set": cambios}, upsert=True)
+
+    # ── ... y contar el total de la cuenta (todas las IP) ──
+    if user:
+        total = user.get("intentos_fallidos", 0) + 1
+        datos = {"intentos_fallidos": total}
+        if total >= MAX_INTENTOS_CUENTA:
+            datos["bloqueado_hasta"] = ahora + timedelta(minutes=TIEMPO_BLOQUEO_MINUTOS)
+            datos["intentos_fallidos"] = 0
+        collection.update_one({"_id": user["_id"]}, {"$set": datos})
+
+    if "bloqueado_hasta" in cambios:
+        return None, (f"Demasiados intentos fallidos. Intenta de nuevo en "
+                      f"{TIEMPO_BLOQUEO_MINUTOS} minutos.")
+    return None, MENSAJE_LOGIN_FALLIDO
+
+
 # ======================================================
 # CONTEXT PROCESSOR
 # ======================================================
@@ -338,7 +644,10 @@ def inject_user():
     except Exception:
         usuario  = None
         es_admin = False
-    return dict(usuario=usuario, es_admin=es_admin)
+    # Token CSRF (cookie "csrf_access_token" que crea flask-jwt-extended); los formularios
+    # POST lo envían en el campo oculto "csrf_token".
+    return dict(usuario=usuario, es_admin=es_admin,
+                csrf_token=request.cookies.get('csrf_access_token', ''))
 
 # ======================================================
 # FUNCIÓN PARA ENVIAR EMAIL
@@ -495,7 +804,12 @@ def service_worker():
     return response
 
 
+MENSAJE_REGISTRO_NO_COMPLETADO = ("No fue posible completar el registro. Verifica tus datos; "
+                                  "si ya tienes cuenta, inicia sesión o recupera tu contraseña.")
+
+
 @app.route('/registro', methods=['GET', 'POST'])
+@limiter.limit(LIMITE_REGISTRO, methods=["POST"])
 def registro():
     if request.method == 'POST':
 
@@ -513,29 +827,26 @@ def registro():
         if not matricula or not usuario or not email or not contrasena:
             abort(400)
 
-        if not matricula.isdigit():
+        if not matricula.isdigit() or len(matricula) > 15:
             flash("La matrícula debe contener solo números.", "error")
             return redirect(url_for('registro'))
 
-        if not validar_no_sql_injection(usuario):
+        if not validar_no_sql_injection(usuario) or len(usuario) > 100:
             flash("Nombre inválido.", "error")
             return redirect(url_for('registro'))
 
-        if not email.endswith("@virtual.utsc.edu.mx"):
+        if not email.endswith("@virtual.utsc.edu.mx") or len(email) > 100:
             flash("Debe usar un correo institucional @virtual.utsc.edu.mx", "error")
             return redirect(url_for('registro'))
 
-        password_regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$'
-        if not re.fullmatch(password_regex, contrasena):
-            flash("La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y símbolo.", "error")
+        if not password_valida(contrasena):
+            flash(PASSWORD_MENSAJE, "error")
             return redirect(url_for('registro'))
 
-        if collection.find_one({'matricula': matricula}):
-            flash("La matrícula ya está registrada.", "error")
-            return redirect(url_for('registro'))
-
-        if collection.find_one({'email': email}):
-            flash("El correo ya está registrado.", "error")
+        # Mensaje único para "matrícula repetida" y "correo repetido": así nadie puede
+        # usar este formulario para averiguar qué matrículas o correos ya están registrados.
+        if collection.find_one({'$or': [{'matricula': matricula}, {'email': email}]}):
+            flash(MENSAJE_REGISTRO_NO_COMPLETADO, "error")
             return redirect(url_for('registro'))
 
         hashed = bcrypt.generate_password_hash(contrasena).decode('utf-8')
@@ -557,6 +868,7 @@ def registro():
 
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit(LIMITE_LOGIN, methods=["POST"])
 def login():
 
     if request.method == 'POST':
@@ -573,48 +885,17 @@ def login():
         if not matricula or not contrasena:
             abort(400)
 
-        user = collection.find_one({'matricula': matricula})
+        user, error = verificar_credenciales(matricula, contrasena)
+        if error:
+            flash(error, "error")
+            return render_template('login.html', matricula_guardada=matricula,
+                                   hcaptcha_sitekey=HCAPTCHA_SITEKEY)
 
-        if not user:
-            flash("Matrícula o contraseña incorrectos.", "error")
-            return render_template('login.html', matricula_guardada=matricula)
-
-        bloqueado_hasta = user.get('bloqueado_hasta')
-        if bloqueado_hasta and datetime.utcnow() < bloqueado_hasta:
-            minutos_restantes = int((bloqueado_hasta - datetime.utcnow()).total_seconds() / 60)
-            flash(f"Cuenta bloqueada temporalmente. Intente nuevamente en {minutos_restantes} minutos.", "error")
-            return render_template('login.html', matricula_guardada=matricula)
-
-        if bcrypt.check_password_hash(user['contrasena'], contrasena):
-
-            collection.update_one(
-                {'_id': user['_id']},
-                {'$set': {'intentos_fallidos': 0, 'bloqueado_hasta': None}}
-            )
-
-            access_token = create_access_token(identity=user['matricula'])
-            response = redirect(url_for('pagina_principal'))
-            set_access_cookies(response, access_token)
-            return response
-
-        intentos = user.get('intentos_fallidos', 0) + 1
-
-        if intentos >= MAX_INTENTOS:
-            bloqueo = datetime.utcnow() + timedelta(minutes=TIEMPO_BLOQUEO_MINUTOS)
-            collection.update_one(
-                {'_id': user['_id']},
-                {'$set': {'intentos_fallidos': intentos, 'bloqueado_hasta': bloqueo}}
-            )
-            flash("Demasiados intentos fallidos. Cuenta bloqueada por 15 minutos.", "error")
-        else:
-            restantes = MAX_INTENTOS - intentos
-            collection.update_one(
-                {'_id': user['_id']},
-                {'$set': {'intentos_fallidos': intentos}}
-            )
-            flash(f"Contraseña incorrecta. Te quedan {restantes} intentos.", "error")
-
-        return render_template('login.html', matricula_guardada=matricula, hcaptcha_sitekey=HCAPTCHA_SITEKEY)
+        access_token = create_access_token(identity=user['matricula'],
+                                           expires_delta=timedelta(minutes=ACCESS_WEB_MINUTOS))
+        response = redirect(url_for('pagina_principal'))
+        set_access_cookies(response, access_token)
+        return response
 
     return render_template('login.html', hcaptcha_sitekey=HCAPTCHA_SITEKEY)
 
@@ -622,6 +903,7 @@ def login():
 @app.route('/logout')
 @jwt_required()
 def logout():
+    revocar_payload(get_jwt())          # el token queda inservible aunque alguien lo haya copiado
     response = redirect(url_for('login'))
     unset_jwt_cookies(response)
     return response
@@ -927,53 +1209,101 @@ def descargar_reporte(token):
     filtros, error = leer_filtros_reporte(datos)
     if error:
         abort(400)
+    # Un solo uso: se registra el jti; si ya existe, el enlace ya se descargó (o se filtró).
+    jti = datos.get("jti")
+    if not jti:
+        abort(403)
+    try:
+        reportes_usados_col.insert_one({
+            "_id": jti,
+            "expira": datetime.utcnow() + timedelta(seconds=REPORTE_ENLACE_SEGUNDOS + 60),
+        })
+    except DuplicateKeyError:
+        return render_template("403.html"), 403
     return respuesta_excel(filtros)
 
 # ======================================================
-# INSCRIPCIÓN — PROCESAR FORMULARIO MULTI-PASO
+# INSCRIPCIÓN Y REINSCRIPCIÓN — LÓGICA COMPARTIDA (web y app móvil)
+# Toda la validación vive aquí, en el servidor: la app y el navegador solo la repiten
+# por comodidad del usuario, pero nunca se confía en ellas.
 # ======================================================
 
-@app.route('/inscripcion_submit', methods=['POST'])
-@jwt_required()
-def inscripcion_submit():
-    matricula_jwt = get_jwt_identity()
-    user = collection.find_one({"matricula": matricula_jwt})
+CURP_REGEX         = re.compile(r'^[A-Z]{4}\d{6}[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{2}$')
+NOMBRE_REGEX       = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]{3,99}$")
+TELEFONO_REGEX     = re.compile(r'^\d{10}$')
+CORREO_REGEX       = re.compile(r'^[^@\s]{1,64}@[^@\s]{1,200}\.[^@\s]{2,}$')
+REFERENCIA_REGEX   = re.compile(r'^[A-Za-z0-9._/\- ]{3,30}$')
+CUATRIMESTRE_REGEX = re.compile(r'^(\d{1,2}|\d{4}-[ABCabc])$')
+MAX_MATERIAS       = 15
 
-    nombre      = request.form.get('nombre', '').strip()
-    curp        = request.form.get('curp', '').strip().upper()
-    fecha_nac   = request.form.get('fecha_nacimiento', '').strip()
-    telefono    = request.form.get('telefono', '').strip()
-    carrera     = request.form.get('carrera', '').strip()
-    cont_nombre = request.form.get('contacto_emergencia_nombre', '').strip()
-    cont_tel    = request.form.get('contacto_emergencia_tel', '').strip()
+
+def leer_materias(crudo):
+    """Convierte el JSON de materias en una lista de nombres. Devuelve None si es inválido."""
+    try:
+        lista = json.loads(crudo or '[]')
+    except ValueError:
+        return None
+    if not isinstance(lista, list) or len(lista) > MAX_MATERIAS:
+        return None
+    materias = []
+    for m in lista:
+        if not isinstance(m, str) or not m.strip() or len(m) > 150:
+            return None
+        materias.append((m.split('|', 1)[1] if '|' in m else m).strip())
+    return materias
+
+
+def procesar_inscripcion(matricula_jwt, user, form, files):
+    """Valida los datos, sube los documentos y guarda la inscripción.
+    Devuelve (True, documento_guardado) o (False, mensaje_de_error)."""
+    nombre      = " ".join(form.get('nombre', '').split())
+    curp        = form.get('curp', '').strip().upper()
+    fecha_nac   = form.get('fecha_nacimiento', '').strip()
+    telefono    = form.get('telefono', '').strip()
+    carrera     = form.get('carrera', '').strip()
+    cont_nombre = " ".join(form.get('contacto_emergencia_nombre', '').split())
+    cont_tel    = form.get('contacto_emergencia_tel', '').strip()
 
     if not all([nombre, curp, fecha_nac, telefono, carrera, cont_nombre, cont_tel]):
-        flash("Todos los campos son obligatorios.", "error")
-        return redirect(url_for('inscripcion'))
-
-    curp_regex = re.compile(r'^[A-Z]{4}\d{6}[HM][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z0-9]{2}$')
-    if not curp_regex.match(curp):
-        flash("La CURP no tiene el formato correcto.", "error")
-        return redirect(url_for('inscripcion'))
+        return False, "Todos los campos son obligatorios."
+    if not NOMBRE_REGEX.match(nombre):
+        return False, "El nombre solo puede contener letras y espacios (mínimo 4 caracteres)."
+    if not CURP_REGEX.match(curp):
+        return False, "La CURP no tiene el formato correcto."
 
     fecha_ok, resultado = validar_fecha_nacimiento(fecha_nac)
     if not fecha_ok:
-        flash(resultado, "error")
-        return redirect(url_for('inscripcion'))
+        return False, resultado
 
-    # ===== SUBIR ARCHIVOS A CLOUDINARY =====
-    foto        = subir_a_cloudinary(request.files.get('fotografia'),  carpeta="inscripciones/fotografias")
-    doc_acta    = subir_a_cloudinary(request.files.get('doc_acta'),    carpeta="inscripciones/actas")
-    doc_cert    = subir_a_cloudinary(request.files.get('doc_cert'),    carpeta="inscripciones/certificados")
-    comprobante = subir_a_cloudinary(request.files.get('comprobante'), carpeta="inscripciones/comprobantes")
+    if not TELEFONO_REGEX.match(telefono):
+        return False, "El teléfono debe tener 10 dígitos."
+    if carrera not in CARRERAS:
+        return False, "Selecciona una carrera válida."
+    if not NOMBRE_REGEX.match(cont_nombre):
+        return False, "El nombre del contacto de emergencia no es válido."
+    if not TELEFONO_REGEX.match(cont_tel):
+        return False, "El teléfono del contacto de emergencia debe tener 10 dígitos."
 
-    if not all([foto, doc_acta, doc_cert, comprobante]):
-        flash("Todos los documentos son obligatorios y deben ser PDF, JPG o PNG.", "error")
-        return redirect(url_for('inscripcion'))
+    # ===== VALIDAR Y SUBIR ARCHIVOS A CLOUDINARY =====
+    documentos = (
+        ('fotografia',  'Fotografía',               'inscripciones/fotografias',  True),
+        ('doc_acta',    'Acta de nacimiento',        'inscripciones/actas',        False),
+        ('doc_cert',    'Certificado de bachillerato', 'inscripciones/certificados', False),
+        ('comprobante', 'Comprobante de pago',       'inscripciones/comprobantes', False),
+    )
+    # Primero se validan TODOS (sin subir nada), para no dejar archivos huérfanos en la nube.
+    for campo, etiqueta, _, solo_img in documentos:
+        error = validar_archivo(files.get(campo), etiqueta, solo_img)
+        if error:
+            return False, error
+    urls = {}
+    for campo, etiqueta, carpeta, solo_img in documentos:
+        urls[campo], error = subir_documento(files.get(campo), carpeta, etiqueta, solo_img)
+        if error:
+            return False, error
 
     folio = 'UTSC-' + uuid.uuid4().hex[:8].upper()
-
-    inscripciones_col.insert_one({
+    doc = {
         'usuario'                   : matricula_jwt,
         'folio'                     : folio,
         'nombre'                    : nombre,
@@ -983,80 +1313,81 @@ def inscripcion_submit():
         'carrera'                   : carrera,
         'contacto_emergencia_nombre': cont_nombre,
         'contacto_emergencia_tel'   : cont_tel,
-        'fotografia'                : foto,
-        'doc_acta'                  : doc_acta,
-        'doc_cert'                  : doc_cert,
-        'comprobante'               : comprobante,
+        'fotografia'                : urls['fotografia'],
+        'doc_acta'                  : urls['doc_acta'],
+        'doc_cert'                  : urls['doc_cert'],
+        'comprobante'               : urls['comprobante'],
         'estatus'                   : 'En revisión',
         'fecha_solicitud'           : datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-    })
+    }
+    inscripciones_col.insert_one(dict(doc))
 
     # ===== ENVIAR CORREO DE CONFIRMACIÓN =====
     if user and user.get("email"):
         enviar_confirmacion_inscripcion(user["email"], nombre, folio, carrera)
+    return True, doc
 
-    return render_template('exito_inscripcion.html',
-        usuario                    = matricula_jwt,
-        folio                      = folio,
-        nombre                     = nombre,
-        curp                       = curp,
-        fecha_nacimiento           = fecha_nac,
-        telefono                   = telefono,
-        carrera                    = carrera,
-        contacto_emergencia_nombre = cont_nombre,
-        contacto_emergencia_tel    = cont_tel
-    )
 
-# ======================================================
-# REINSCRIPCIÓN — PROCESAR FORMULARIO MULTI-PASO
-# ======================================================
+def procesar_reinscripcion(matricula_jwt, user, form, files, exigir_contacto=True):
+    """Valida, sube el comprobante y guarda la reinscripción.
+    exigir_contacto=False (app móvil): correo y teléfono son opcionales; el correo
+    se toma de la cuenta. Devuelve (True, documento_guardado) o (False, mensaje)."""
+    matricula       = form.get('matricula', '').strip()
+    nombre          = " ".join(form.get('nombre', '').split())
+    correo          = form.get('correo', '').strip().lower()
+    telefono        = form.get('telefono', '').strip()
+    carrera_clave   = form.get('carrera_clave', '').strip()
+    cuatrimestre    = form.get('cuatrimestre', '').strip()
+    referencia_pago = form.get('referencia_pago', '').strip()
+    fecha_pago      = form.get('fecha_pago', '').strip()
+    es_estadia      = form.get('es_estadia', '0').strip().lower() in ('1', 'true')
 
-@app.route('/reinscripcion_submit', methods=['POST'])
-@jwt_required()
-def reinscripcion_submit():
-    matricula_jwt = get_jwt_identity()
-    user = collection.find_one({"matricula": matricula_jwt})
+    if not correo and not exigir_contacto and user:
+        correo = user.get('email', '')
 
-    matricula       = request.form.get('matricula', '').strip()
-    nombre          = request.form.get('nombre', '').strip()
-    correo          = request.form.get('correo', '').strip().lower()
-    telefono        = request.form.get('telefono', '').strip()
-    carrera_clave   = request.form.get('carrera_clave', '').strip()
-    cuatrimestre    = request.form.get('cuatrimestre', '').strip()
-    referencia_pago = request.form.get('referencia_pago', '').strip()
-    fecha_pago      = request.form.get('fecha_pago', '').strip()
-    es_estadia      = request.form.get('es_estadia', '0').strip() == '1'
+    obligatorios = [matricula, nombre, carrera_clave, cuatrimestre, referencia_pago, fecha_pago]
+    if exigir_contacto:
+        obligatorios += [correo, telefono]
+    if not all(obligatorios):
+        return False, "Todos los campos son obligatorios."
 
-    if not matricula or not matricula.isdigit():
-        flash("La matrícula debe contener solo números.", "error")
-        return redirect(url_for('reinscripcion'))
-
-    carrera_nombre = CARRERAS.get(carrera_clave, carrera_clave)
-
-    materias_raw = request.form.get('materias', '[]')
+    if not matricula.isdigit():
+        return False, "La matrícula debe contener solo números."
+    if matricula != matricula_jwt:
+        return False, "La matrícula debe coincidir con la de tu cuenta."
+    if not NOMBRE_REGEX.match(nombre):
+        return False, "El nombre solo puede contener letras y espacios (mínimo 4 caracteres)."
+    if correo and not CORREO_REGEX.match(correo):
+        return False, "El correo electrónico no es válido."
+    if telefono and not TELEFONO_REGEX.match(telefono):
+        return False, "El teléfono debe tener 10 dígitos."
+    if carrera_clave not in CARRERAS:
+        return False, "Selecciona una carrera válida."
+    if not CUATRIMESTRE_REGEX.match(cuatrimestre) or (cuatrimestre.isdigit() and not 1 <= int(cuatrimestre) <= 10):
+        return False, "El cuatrimestre no es válido."
+    if not REFERENCIA_REGEX.match(referencia_pago):
+        return False, "La referencia de pago no es válida (3 a 30 letras, números o guiones)."
     try:
-        materias_lista = json.loads(materias_raw)
-        materias = [m.split('|')[1] if '|' in m else m for m in materias_lista]
-    except Exception:
-        materias = []
+        f_pago = datetime.strptime(fecha_pago, "%Y-%m-%d").date()
+    except ValueError:
+        return False, "La fecha de pago no tiene un formato válido."
+    if f_pago > datetime.utcnow().date() + timedelta(days=1):
+        return False, "La fecha de pago no puede ser futura."
 
-    if not all([nombre, correo, telefono, carrera_clave, cuatrimestre, referencia_pago, fecha_pago]):
-        flash("Todos los campos son obligatorios.", "error")
-        return redirect(url_for('reinscripcion'))
-
+    materias = leer_materias(form.get('materias', '[]'))
+    if materias is None:
+        return False, "La lista de materias no es válida."
     if not es_estadia and not materias:
-        flash("Debes seleccionar al menos una materia.", "error")
-        return redirect(url_for('reinscripcion'))
+        return False, "Debes seleccionar al menos una materia."
 
-    # ===== SUBIR COMPROBANTE A CLOUDINARY =====
-    comprobante = subir_a_cloudinary(request.files.get('comprobante'), carpeta="reinscripciones/comprobantes")
-    if not comprobante:
-        flash("El comprobante de pago es obligatorio.", "error")
-        return redirect(url_for('reinscripcion'))
+    comprobante, error = subir_documento(files.get('comprobante'),
+                                         "reinscripciones/comprobantes", "Comprobante de pago")
+    if error:
+        return False, error
 
+    carrera_nombre = CARRERAS[carrera_clave]
     folio = 'REINSC-' + uuid.uuid4().hex[:8].upper()
-
-    reinscripciones_col.insert_one({
+    doc = {
         'usuario'        : matricula_jwt,
         'folio'          : folio,
         'matricula'      : matricula,
@@ -1073,67 +1404,161 @@ def reinscripcion_submit():
         'referencia_pago': referencia_pago,
         'estatus'        : 'En revisión',
         'fecha_solicitud': datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-    })
+    }
+    reinscripciones_col.insert_one(dict(doc))
 
-    # ===== ENVIAR CORREO DE CONFIRMACIÓN =====
     if user and user.get("email"):
         enviar_confirmacion_reinscripcion(user["email"], nombre, folio, carrera_nombre, cuatrimestre)
+    return True, doc
+
+
+# ======================================================
+# INSCRIPCIÓN — PROCESAR FORMULARIO MULTI-PASO (web)
+# ======================================================
+
+@app.route('/inscripcion_submit', methods=['POST'])
+@limiter.limit(LIMITE_TRAMITES)
+@jwt_required()
+def inscripcion_submit():
+    matricula_jwt = get_jwt_identity()
+    user = collection.find_one({"matricula": matricula_jwt})
+
+    ok, resultado = procesar_inscripcion(matricula_jwt, user, request.form, request.files)
+    if not ok:
+        flash(resultado, "error")
+        return redirect(url_for('inscripcion'))
+
+    return render_template('exito_inscripcion.html',
+        usuario                    = matricula_jwt,
+        folio                      = resultado['folio'],
+        nombre                     = resultado['nombre'],
+        curp                       = resultado['curp'],
+        fecha_nacimiento           = resultado['fecha_nacimiento'],
+        telefono                   = resultado['telefono'],
+        carrera                    = resultado['carrera'],
+        contacto_emergencia_nombre = resultado['contacto_emergencia_nombre'],
+        contacto_emergencia_tel    = resultado['contacto_emergencia_tel']
+    )
+
+# ======================================================
+# REINSCRIPCIÓN — PROCESAR FORMULARIO MULTI-PASO (web)
+# ======================================================
+
+@app.route('/reinscripcion_submit', methods=['POST'])
+@limiter.limit(LIMITE_TRAMITES)
+@jwt_required()
+def reinscripcion_submit():
+    matricula_jwt = get_jwt_identity()
+    user = collection.find_one({"matricula": matricula_jwt})
+
+    ok, resultado = procesar_reinscripcion(matricula_jwt, user, request.form, request.files)
+    if not ok:
+        flash(resultado, "error")
+        return redirect(url_for('reinscripcion'))
 
     return render_template('exito_reinscripcion.html',
         usuario         = matricula_jwt,
-        folio           = folio,
-        matricula       = matricula,
-        nombre          = nombre,
-        correo          = correo,
-        carrera         = carrera_nombre,
-        cuatrimestre    = cuatrimestre,
-        es_estadia      = es_estadia,
-        materias        = materias,
-        referencia_pago = referencia_pago,
-        fecha_pago      = fecha_pago
+        folio           = resultado['folio'],
+        matricula       = resultado['matricula'],
+        nombre          = resultado['nombre'],
+        correo          = resultado['correo'],
+        carrera         = resultado['carrera'],
+        cuatrimestre    = resultado['cuatrimestre'],
+        es_estadia      = resultado['es_estadia'],
+        materias        = resultado['materias'],
+        referencia_pago = resultado['referencia_pago'],
+        fecha_pago      = resultado['fecha_pago']
     )
 
 # ======================================================
 # RECUPERACIÓN DE CONTRASEÑA
 # ======================================================
+# El enlace del correo es de UN SOLO USO: el token incluye el final del hash de la contraseña
+# actual, así que en cuanto la contraseña cambia, el enlace deja de ser válido.
+
+RESET_SEGUNDOS = 3600
+MENSAJE_RECUPERAR = "Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña."
+
+
+def generar_token_reset(user):
+    return serializer.dumps({"email": user["email"], "h": user["contrasena"][-12:]},
+                            salt='password-reset-salt')
+
+
+def usuario_de_token_reset(token):
+    """Devuelve el usuario dueño del token o None si es inválido, caducó o ya se usó."""
+    try:
+        datos = serializer.loads(token, salt='password-reset-salt', max_age=RESET_SEGUNDOS)
+    except (SignatureExpired, BadSignature):
+        return None
+    if not isinstance(datos, dict):
+        return None
+    user = collection.find_one({"email": datos.get("email")})
+    if not user or user["contrasena"][-12:] != datos.get("h"):
+        return None
+    return user
+
+
+def enviar_enlace_reset(user):
+    token  = generar_token_reset(user)
+    enlace = url_externa('restablecer_contrasena', token=token)
+    asunto = "Recuperación de contraseña — UTSC"
+    cuerpo = f"""
+        <p>Hola <strong>{escape(user.get('usuario', ''))}</strong>,</p>
+        <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
+        <p>Haz clic en el siguiente enlace para crear una nueva contraseña:</p>
+        <p><a href="{enlace}" style="background:#1A5F5C;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;">
+            Restablecer contraseña
+        </a></p>
+        <p>Este enlace expirará en <strong>1 hora</strong> y solo se puede usar una vez.</p>
+        <p>Si no solicitaste este cambio, ignora este mensaje.</p>
+        <p>Saludos,<br>Control Escolar UTSC</p>
+    """
+    enviar_email(user["email"], asunto, cuerpo)
+
 
 @app.route('/recuperar_contrasena', methods=['GET', 'POST'])
+@limiter.limit(LIMITE_RECUPERAR, methods=["POST"])
 def recuperar_contrasena():
     if request.method == 'POST':
-        email   = request.form['email']
-        usuario = collection.find_one({'email': email})
+        email   = str(request.form.get('email', '')).lower().strip()
+        usuario = collection.find_one({'email': email}) if email else None
 
         if usuario:
-            token  = serializer.dumps(email, salt='password-reset-salt')
-            enlace = url_for('restablecer_contrasena', token=token, _external=True)
-            asunto = "Recuperación de contraseña"
-            cuerpo = f"""
-            <p>Hola, hemos recibido una solicitud para restablecer tu contraseña.</p>
-            <p>Si no has solicitado este cambio, ignora este mensaje.</p>
-            <p>Para restablecer tu contraseña, haz clic en el siguiente enlace:</p>
-            <a href="{enlace}">Restablecer contraseña</a>
-            """
-            enviar_email(email, asunto, cuerpo)
-            flash("Te hemos enviado un correo para recuperar tu contraseña.", "success")
-        else:
-            flash("El correo electrónico no está registrado.", "error")
+            try:
+                enviar_enlace_reset(usuario)
+            except Exception as e:
+                print(f"Error enviando correo de recuperación: {e}")
+        # Misma respuesta exista o no el correo: no se puede usar para descubrir cuentas.
+        flash(MENSAJE_RECUPERAR, "success")
 
     return render_template('recuperar_contrasena.html')
 
 
 @app.route('/restablecer_contrasena/<token>', methods=['GET', 'POST'])
+@limiter.limit(LIMITE_RECUPERAR, methods=["POST"])
 def restablecer_contrasena(token):
-    try:
-        email = serializer.loads(token, salt='password-reset-salt', max_age=3600)
-    except (SignatureExpired, BadSignature):
-        flash("El enlace de restablecimiento ha caducado o es inválido.", "error")
+    user = usuario_de_token_reset(token)
+    if not user:
+        flash("El enlace de restablecimiento ha caducado, ya fue utilizado o es inválido.", "error")
         return redirect(url_for('recuperar_contrasena'))
 
     if request.method == 'POST':
-        nueva_contrasena = request.form['nueva_contrasena']
-        hashed_password  = bcrypt.generate_password_hash(nueva_contrasena).decode('utf-8')
-        collection.update_one({'email': email}, {'$set': {'contrasena': hashed_password}})
-        flash("Tu contraseña ha sido restablecida con éxito.", "success")
+        nueva     = str(request.form.get('nueva_contrasena', ''))
+        confirmar = str(request.form.get('confirmar_contrasena', nueva))
+        if nueva != confirmar:
+            flash("Las contraseñas no coinciden.", "error")
+            return render_template('restablecer_contrasena.html')
+        if not password_valida(nueva):
+            flash(PASSWORD_MENSAJE, "error")
+            return render_template('restablecer_contrasena.html')
+
+        hashed = bcrypt.generate_password_hash(nueva).decode('utf-8')
+        collection.update_one({'_id': user['_id']}, {'$set': {
+            'contrasena': hashed, 'intentos_fallidos': 0, 'bloqueado_hasta': None}})
+        login_intentos_col.delete_many({"_id": {"$regex": f"^{re.escape(user['matricula'])}\\|"}})
+        cerrar_todas_las_sesiones(user['matricula'])      # las sesiones abiertas dejan de servir
+        flash("Tu contraseña ha sido restablecida con éxito. Inicia sesión.", "success")
         return redirect(url_for('login'))
 
     return render_template('restablecer_contrasena.html')
@@ -1142,25 +1567,50 @@ def restablecer_contrasena(token):
 # MANEJADORES DE ERRORES
 # ======================================================
 
+def error_http(codigo, mensaje, plantilla):
+    """Respuesta de error: JSON para /api/, página HTML para el navegador."""
+    if es_ruta_api():
+        return jsonify(ok=False, mensaje=mensaje), codigo
+    return render_template(plantilla), codigo
+
 @app.errorhandler(400)
-def bad_request(e):      return render_template("400.html"), 400
+def bad_request(e):      return error_http(400, "Solicitud inválida.", "400.html")
 
 @app.errorhandler(401)
-def unauthorized(e):     return render_template("401.html"), 401
+def unauthorized(e):     return error_http(401, "No autorizado.", "401.html")
 
 @app.errorhandler(403)
-def forbidden(e):        return render_template("403.html"), 403
+def forbidden(e):        return error_http(403, "Acceso denegado.", "403.html")
 
 @app.errorhandler(404)
-def not_found(e):        return render_template("404.html"), 404
+def not_found(e):        return error_http(404, "Recurso no encontrado.", "404.html")
+
+@app.errorhandler(413)
+def demasiado_grande(e):
+    mensaje = "Los archivos enviados superan el tamaño máximo permitido."
+    if es_ruta_api():
+        return jsonify(ok=False, mensaje=mensaje), 413
+    flash(mensaje, "error")
+    destino = request.referrer or url_for('login')
+    return redirect(destino)
+
+@app.errorhandler(429)
+def demasiadas_peticiones(e):
+    mensaje = "Demasiadas solicitudes. Espera un momento e intenta de nuevo."
+    if es_ruta_api():
+        return jsonify(ok=False, mensaje=mensaje), 429
+    flash(mensaje, "error")
+    return redirect(request.referrer or url_for('login'))
 
 @app.errorhandler(500)
-def internal_error(e):   return render_template("500.html"), 500
+def internal_error(e):   return error_http(500, "Error interno del servidor.", "500.html")
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(e):
+    if isinstance(e, HTTPException):          # 405, 408, etc.: conservar su código real
+        return e
     print(f"Unexpected error: {e}")
-    return render_template("500.html"), 500
+    return error_http(500, "Error interno del servidor.", "500.html")
 
 
 # ======================================================
@@ -1168,6 +1618,7 @@ def handle_unexpected_error(e):
 # ======================================================
 
 @app.route('/api/login', methods=['POST'])
+@limiter.limit(LIMITE_LOGIN)
 def api_login():
     data       = request.get_json(silent=True) or {}
     matricula  = str(data.get('matricula', '')).strip()
@@ -1176,49 +1627,58 @@ def api_login():
     if not matricula or not contrasena:
         return jsonify(ok=False, mensaje="Matrícula y contraseña son requeridos."), 400
 
-    user = collection.find_one({'matricula': matricula})
+    user, error = verificar_credenciales(matricula, contrasena)
+    if error:
+        return jsonify(ok=False, mensaje=error), 401
+
+    access, refresh = emitir_tokens_movil(user)
+    return jsonify(
+        ok=True,
+        access_token=access,
+        refresh_token=refresh,
+        expires_in=ACCESS_MOVIL_MINUTOS * 60,
+        usuario=user['usuario'],
+        matricula=user['matricula'],
+        es_admin=user.get('es_admin', False)
+    ), 200
+
+
+@app.route('/api/refresh', methods=['POST'])
+@limiter.limit(LIMITE_REFRESH)
+@jwt_required(refresh=True)
+def api_refresh():
+    """Canjea un refresh token por un access token nuevo. El refresh token se ROTA:
+    el anterior queda revocado y se entrega uno nuevo."""
+    payload = get_jwt()
+    user = collection.find_one({'matricula': payload['sub']})
     if not user:
-        return jsonify(ok=False, mensaje="Matrícula o contraseña incorrectos."), 401
+        return jsonify(ok=False, codigo="token_revocado", mensaje="Cuenta no encontrada."), 401
+    revocar_payload(payload)
+    access, refresh = emitir_tokens_movil(user)
+    return jsonify(ok=True, access_token=access, refresh_token=refresh,
+                   expires_in=ACCESS_MOVIL_MINUTOS * 60,
+                   usuario=user['usuario'], es_admin=user.get('es_admin', False)), 200
 
-    bloqueado_hasta = user.get('bloqueado_hasta')
-    if bloqueado_hasta and datetime.utcnow() < bloqueado_hasta:
-        mins = int((bloqueado_hasta - datetime.utcnow()).total_seconds() / 60)
-        return jsonify(ok=False, mensaje=f"Cuenta bloqueada. Espera {mins} minutos."), 401
 
-    if bcrypt.check_password_hash(user['contrasena'], contrasena):
-        collection.update_one(
-            {'_id': user['_id']},
-            {'$set': {'intentos_fallidos': 0, 'bloqueado_hasta': None}}
-        )
-        token = create_access_token(identity=user['matricula'])
-        return jsonify(
-            ok=True,
-            access_token=token,
-            usuario=user['usuario'],
-            matricula=user['matricula'],
-            es_admin=user.get('es_admin', False)
-        ), 200
-
-    intentos = user.get('intentos_fallidos', 0) + 1
-    if intentos >= MAX_INTENTOS:
-        bloqueo = datetime.utcnow() + timedelta(minutes=TIEMPO_BLOQUEO_MINUTOS)
-        collection.update_one(
-            {'_id': user['_id']},
-            {'$set': {'intentos_fallidos': intentos, 'bloqueado_hasta': bloqueo}}
-        )
-        return jsonify(ok=False,
-            mensaje="Demasiados intentos. Cuenta bloqueada por 15 minutos."), 401
-
-    restantes = MAX_INTENTOS - intentos
-    collection.update_one(
-        {'_id': user['_id']},
-        {'$set': {'intentos_fallidos': intentos}}
-    )
-    return jsonify(ok=False,
-        mensaje=f"Contraseña incorrecta. Te quedan {restantes} intentos."), 401
+@app.route('/api/logout', methods=['POST'])
+@jwt_required()
+def api_logout():
+    """Cierra la sesión en el servidor: revoca el access token y, si se envía, el refresh token."""
+    revocar_payload(get_jwt())
+    data = request.get_json(silent=True) or {}
+    refresh = data.get('refresh_token')
+    if refresh:
+        try:
+            payload = decode_token(refresh)
+            if payload.get('type') == 'refresh' and payload.get('sub') == get_jwt_identity():
+                revocar_payload(payload)
+        except Exception:
+            pass                                  # un refresh inválido no impide cerrar sesión
+    return jsonify(ok=True, mensaje="Sesión cerrada."), 200
 
 
 @app.route('/api/registro', methods=['POST'])
+@limiter.limit(LIMITE_REGISTRO)
 def api_registro():
     data       = request.get_json(silent=True) or {}
     matricula  = str(data.get('matricula', '')).strip()
@@ -1228,19 +1688,18 @@ def api_registro():
 
     if not matricula or not usuario or not email or not contrasena:
         return jsonify(ok=False, mensaje="Todos los campos son requeridos."), 400
-    if not matricula.isdigit():
+    if not matricula.isdigit() or len(matricula) > 15:
         return jsonify(ok=False, mensaje="La matrícula debe contener solo números."), 400
-    if not email.endswith("@virtual.utsc.edu.mx"):
+    if not validar_no_sql_injection(usuario) or len(usuario) > 100:
+        return jsonify(ok=False, mensaje="Nombre inválido."), 400
+    if not email.endswith("@virtual.utsc.edu.mx") or len(email) > 100:
         return jsonify(ok=False, mensaje="Debe usar un correo @virtual.utsc.edu.mx"), 400
+    if not password_valida(contrasena):
+        return jsonify(ok=False, mensaje=PASSWORD_MENSAJE), 400
 
-    password_regex = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$'
-    if not re.fullmatch(password_regex, contrasena):
-        return jsonify(ok=False,
-            mensaje="La contraseña debe tener mayúscula, minúscula, número y símbolo (mínimo 8 caracteres)."), 400
-    if collection.find_one({'matricula': matricula}):
-        return jsonify(ok=False, mensaje="La matrícula ya está registrada."), 409
-    if collection.find_one({'email': email}):
-        return jsonify(ok=False, mensaje="El correo ya está registrado."), 409
+    # Misma respuesta para matrícula repetida y correo repetido (no revelar qué existe).
+    if collection.find_one({'$or': [{'matricula': matricula}, {'email': email}]}):
+        return jsonify(ok=False, mensaje=MENSAJE_REGISTRO_NO_COMPLETADO), 409
 
     hashed = bcrypt.generate_password_hash(contrasena).decode('utf-8')
     collection.insert_one({
@@ -1255,10 +1714,42 @@ def api_registro():
 @jwt_required()
 def api_perfil():
     matricula = get_jwt_identity()
-    user = collection.find_one({'matricula': matricula}, {'_id': 0, 'contrasena': 0})
+    # Lista blanca: solo los campos que la app necesita (nunca contraseña, contadores de
+    # intentos, fechas de bloqueo ni cualquier campo interno que se agregue en el futuro).
+    user = collection.find_one({'matricula': matricula},
+                               {'_id': 0, 'matricula': 1, 'usuario': 1, 'email': 1, 'es_admin': 1})
     if not user:
         return jsonify(ok=False, mensaje="Usuario no encontrado."), 404
     return jsonify(ok=True, **user), 200
+
+
+@app.route('/api/inscripcion', methods=['POST'])
+@limiter.limit(LIMITE_TRAMITES)
+@jwt_required()
+def api_inscripcion():
+    """Inscripción desde la app móvil (multipart/form-data con los mismos campos y
+    archivos que el formulario web). Aplica las mismas validaciones del servidor."""
+    matricula = get_jwt_identity()
+    user = collection.find_one({"matricula": matricula})
+    ok, resultado = procesar_inscripcion(matricula, user, request.form, request.files)
+    if not ok:
+        return jsonify(ok=False, mensaje=resultado), 400
+    return jsonify(ok=True, folio=resultado['folio'],
+                   mensaje="Solicitud recibida. Recibirás un correo con tu folio."), 201
+
+
+@app.route('/api/reinscripcion', methods=['POST'])
+@limiter.limit(LIMITE_TRAMITES)
+@jwt_required()
+def api_reinscripcion():
+    matricula = get_jwt_identity()
+    user = collection.find_one({"matricula": matricula})
+    ok, resultado = procesar_reinscripcion(matricula, user, request.form, request.files,
+                                           exigir_contacto=False)
+    if not ok:
+        return jsonify(ok=False, mensaje=resultado), 400
+    return jsonify(ok=True, folio=resultado['folio'],
+                   mensaje="Reinscripción recibida. Recibirás un correo con tu folio."), 201
 
 
 @app.route('/api/historial', methods=['GET'])
@@ -1329,6 +1820,7 @@ def api_admin_reporte_enlace():
 
     inscs, reincs = datos_reporte(filtros)
     payload = {
+        "jti"    : uuid.uuid4().hex,          # identificador único: el enlace se puede usar una sola vez
         "admin"  : admin['matricula'],
         "tipo"   : filtros["tipo"],
         "estatus": filtros["estatus"],
@@ -1347,6 +1839,7 @@ def api_admin_reporte_enlace():
 
 
 @app.route('/api/recuperar_contrasena', methods=['POST'])
+@limiter.limit(LIMITE_RECUPERAR)
 def api_recuperar_contrasena():
     data  = request.get_json(silent=True) or {}
     email = str(data.get('email', '')).lower().strip()
@@ -1358,32 +1851,15 @@ def api_recuperar_contrasena():
         return jsonify(ok=False, mensaje="Debe ser un correo @virtual.utsc.edu.mx"), 400
 
     usuario = collection.find_one({'email': email})
-    if not usuario:
-        # Por seguridad no revelamos si existe o no
-        return jsonify(ok=True, mensaje="Si el correo está registrado, recibirás un enlace."), 200
+    if usuario:
+        try:
+            enviar_enlace_reset(usuario)
+        except Exception as e:
+            # Se registra, pero la respuesta es la misma: un error de envío solo ocurre
+            # para correos existentes y delataría que la cuenta existe.
+            print(f"Error enviando correo: {e}")
 
-    token  = serializer.dumps(email, salt='password-reset-salt')
-    enlace = url_for('restablecer_contrasena', token=token, _external=True)
-    asunto = "Recuperación de contraseña — UTSC"
-    cuerpo = f"""
-        <p>Hola <strong>{usuario.get('usuario', '')}</strong>,</p>
-        <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
-        <p>Haz clic en el siguiente enlace para crear una nueva contraseña:</p>
-        <p><a href="{enlace}" style="background:#1A5F5C;color:white;padding:10px 20px;border-radius:5px;text-decoration:none;">
-            Restablecer contraseña
-        </a></p>
-        <p>Este enlace expirará en <strong>1 hora</strong>.</p>
-        <p>Si no solicitaste este cambio, ignora este mensaje.</p>
-        <p>Saludos,<br>Control Escolar UTSC</p>
-    """
-    try:
-        enviar_email(email, asunto, cuerpo)
-    except Exception as e:
-        print(f"Error enviando correo: {e}")
-        return jsonify(ok=False, mensaje="Error al enviar el correo. Intenta más tarde."), 500
-
-    return jsonify(ok=True, mensaje="Si el correo está registrado, recibirás un enlace."), 200
-
+    return jsonify(ok=True, mensaje=MENSAJE_RECUPERAR), 200
 
 
 @app.route('/ping')
