@@ -97,3 +97,28 @@
 .modal-acciones .btn-confirmar { background: #c62828; color: #fff; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; font-weight: 700; }
 .modal-acciones .btn-confirmar:hover { background: #8b0000; }
 .modal-error { color: #c62828; font-size: 0.8rem; margin-top: 6px; display: none; }
+
+/* ===== Paneles anchos: la tabla de solicitudes aprovecha todo el ancho de la pantalla ===== */
+.container.container-ancho { padding: 30px 2%; }
+.container.container-ancho .card { max-width: none; width: 100%; padding: 24px 28px; }
+.container-ancho .tabla-admin { font-size: 0.82rem; min-width: 1100px; }
+.container-ancho .tabla-admin th, .container-ancho .tabla-admin td { padding: 9px 10px; }
+.container-ancho .tabla-admin td { min-width: 70px; }
+.container-ancho .tabla-admin td:nth-child(2) { min-width: 140px; }
+@media (max-width: 800px) { .container.container-ancho { padding: 20px 8px; } .container.container-ancho .card { padding: 16px 12px; } }
+
+/* ===== Super admin: usuarios ===== */
+.rol-badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:.75rem; font-weight:700; border:1px solid; }
+.rol-alumno { background:#e3f2fd; color:#1565c0; border-color:#1565c0; }
+.rol-admin  { background:#fff3e0; color:#e65100; border-color:#e65100; }
+.rol-super_admin { background:#ede7f6; color:#4527a0; border-color:#4527a0; }
+.filtros-usuarios { display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 18px; }
+.filtros-usuarios input, .filtros-usuarios select { padding:9px 12px; border:1px solid #ccc; border-radius:6px; font-size:.9rem; }
+.filtros-usuarios input { flex:1; min-width:200px; }
+.btn-mini { border:none; border-radius:6px; padding:6px 10px; font-size:.78rem; font-weight:700; cursor:pointer; color:#fff; background:var(--nl-green); }
+.btn-mini.peligro { background:#c62828; }
+.btn-mini.aviso { background:#f57f17; }
+.acciones-usuario { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.acciones-usuario form { display:inline-flex; gap:6px; align-items:center; margin:0; }
+.acciones-usuario select { padding:5px 6px; border:1px solid #ccc; border-radius:6px; font-size:.8rem; }
+.tag-bloq { color:#c62828; font-size:.75rem; font-weight:700; }

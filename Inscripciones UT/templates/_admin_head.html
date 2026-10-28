@@ -6,9 +6,9 @@
         </div>
         <ul class="navbar-menu">
             <li><a href="/pagina_principal">Inicio</a></li>
-            <li><a href="/admin" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> Admin</a></li>
+            <li><a href="{{ panel_url }}" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> {{ panel_label }}</a></li>
             <li class="dropdown">
-                <button class="dropbtn">{{ usuario[0].upper() }}</button>
+                <button class="dropbtn">{{ usuario[0].upper() if usuario else 'U' }}</button>
                 <div class="dropdown-content">
                     <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
                     <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>

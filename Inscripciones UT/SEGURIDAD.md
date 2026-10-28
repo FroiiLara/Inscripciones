@@ -84,3 +84,11 @@ python pruebas/test_limite.py        # límites de peticiones (429)
 
 Ejecútalas desde la carpeta `Inscripciones UT`. La app Flutter no se pudo compilar en el entorno de
 desarrollo: ejecuta `flutter analyze` y prueba en un teléfono real (login, huella, inscripción, cerrar sesión).
+
+## Roles (alumno · admin · super_admin)
+- **alumno**: inscripción, reinscripción e historial propios.
+- **admin** (Control Escolar): solicitudes, dashboard y reportes. No se inscribe.
+- **super_admin**: usuarios y roles (cambiar rol, desbloquear, cerrar sesiones, eliminar). No ve solicitudes ni se inscribe.
+- El rol vive en `usuarios.rol`. Las cuentas antiguas usan `es_admin`, que se lee de forma estricta (el texto `"false"` ya NO cuenta como admin).
+- `SUPER_ADMIN_MATRICULAS` (variable de entorno) fija super admins aunque la base de datos diga otra cosa.
+- Cambiar el rol de alguien cierra sus sesiones de inmediato.

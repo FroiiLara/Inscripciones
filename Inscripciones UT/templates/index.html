@@ -15,56 +15,7 @@
 
 <!-- ===== HEADER / NAVBAR ===== -->
 <header>
-    <nav class="navbar">
-        <div class="navbar-left">
-            <img src="/static/img/logo.png" alt="logo" class="nav-logo">
-            <span>Gobierno de Nuevo León</span>
-        </div>
-
-        <ul class="navbar-menu">
-            <li><a href="/pagina_principal" class="active">Inicio</a></li>
-            <li><a href="/soporte">Soporte</a></li>
-
-            {% if es_admin %}
-            <li>
-                <a href="/admin" style="color:var(--nl-orange); font-weight:bold;">
-                    <i class="fas fa-shield-alt"></i> Panel Admin
-                </a>
-            </li>
-            {% endif %}
-
-            <li class="dropdown">
-                <button class="dropbtn">{{ usuario[0].upper() }}</button>
-                <div class="dropdown-content">
-                    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
-                    {% if not es_admin %}
-                    <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
-                    {% endif %}
-                    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
-                </div>
-            </li>
-        </ul>
-
-        <button class="hamburger" onclick="toggleMenu()">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-    </nav>
-
-    <div class="mobile-menu" id="mobileMenu">
-        <a href="/pagina_principal">Inicio</a>
-        <a href="/soporte">Soporte</a>
-        {% if es_admin %}
-        <a href="/admin" style="color:var(--nl-orange);font-weight:bold;">
-            <i class="fas fa-shield-alt"></i> Panel Admin
-        </a>
-        {% else %}
-        <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
-        {% endif %}
-        <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
-        <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
-    </div>
+    {% set activo = 'inicio' %}{% set con_tramites = false %}{% include '_navbar.html' %}
 </header>
 
 <!-- ===== CONTENIDO ===== -->
@@ -82,9 +33,10 @@
         </h1>
 
         <p style="font-size:1.1rem; color:#666;">
-            Seleccione una opción del menú para comenzar su trámite escolar.
+            {% if es_alumno %}Seleccione una opción del menú para comenzar su trámite escolar.{% else %}Sesión de {{ etiqueta_rol }}.{% endif %}
         </p>
 
+        {% if es_alumno %}
         <div class="btn-group">
             <a href="{{ url_for('inscripcion') }}" class="btn-primary">
                 Iniciar Inscripción
@@ -94,6 +46,13 @@
                 Reinscripción
             </a>
         </div>
+        {% else %}
+        <div class="btn-group">
+            <a href="{{ panel_url }}" class="btn-primary">
+                <i class="fas fa-shield-alt"></i> Ir a {{ panel_label }}
+            </a>
+        </div>
+        {% endif %}
     </div>
 
 </div>
@@ -110,7 +69,7 @@
 
         <div class="footer-section">
             <h4>Enlaces Rápidos</h4><br>
-            <a href="/inscripcion">Nueva Inscripción</a><br>
+            {% if es_alumno %}<a href="/inscripcion">Nueva Inscripción</a><br>{% endif %}
             <a href="/soporte">Soporte</a><br>
             <a href="/static/docs/Aviso_Privacidad_UTSC.pdf" download="Aviso_Privacidad_UTSC.pdf">
                 <i class="fas fa-file-download"></i> Aviso de Privacidad

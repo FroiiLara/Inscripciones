@@ -61,33 +61,7 @@
 <body>
 
 <header>
-    <nav class="navbar">
-        <div class="navbar-left">
-            <img src="{{ url_for('static', filename='img/logo.png') }}" class="nav-logo" alt="Gobierno NL">
-            <span class="navbar-title">Gobierno de Nuevo León</span>
-        </div>
-        <ul class="navbar-menu">
-            <li><a href="/pagina_principal">Inicio</a></li>
-            <li><a href="/inscripcion">Inscripción</a></li>
-            <li><a href="/reinscripcion">Reinscripción</a></li>
-            <li><a href="/soporte">Soporte</a></li>
-            <li class="dropdown">
-                <button class="dropbtn">{{ usuario[0].upper() }}</button>
-                <div class="dropdown-content">
-                    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
-                    <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
-                    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
-                </div>
-            </li>
-        </ul>
-        <button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
-    </nav>
-    <div class="mobile-menu" id="mobileMenu">
-        <a href="/pagina_principal">Inicio</a>
-        <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
-        <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
-        <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
-    </div>
+    {% set activo = 'historial' %}{% set con_tramites = true %}{% include '_navbar.html' %}
 </header>
 
 <div class="container">

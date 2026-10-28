@@ -629,24 +629,91 @@ def verificar_credenciales(matricula, contrasena):
 # CONTEXT PROCESSOR
 # ======================================================
 
+# ------------------------------------------------------
+# ROLES: alumno · admin · super_admin
+#   alumno      → inscripción, reinscripción e historial propios
+#   admin       → Control Escolar: solicitudes, dashboard y reportes (NO se inscribe)
+#   super_admin → administración del sistema: usuarios y roles (NO ve solicitudes ni se inscribe)
+# ------------------------------------------------------
+ROL_ALUMNO, ROL_ADMIN, ROL_SUPER = 'alumno', 'admin', 'super_admin'
+ROLES_VALIDOS = (ROL_ALUMNO, ROL_ADMIN, ROL_SUPER)
+ETIQUETA_ROL = {ROL_ALUMNO: 'Alumno', ROL_ADMIN: 'Administrador', ROL_SUPER: 'Super Administrador'}
+
+# Matrículas que SIEMPRE son super admin (variable de entorno, separadas por coma). Sirve para
+# crear el primer super admin y para recuperar el acceso si alguien se queda sin él.
+SUPER_ADMIN_MATRICULAS = {m.strip() for m in os.getenv('SUPER_ADMIN_MATRICULAS', '').split(',') if m.strip()}
+
+
+def _bool_estricto(valor):
+    """Interpreta True/'true'/'1'/'si' como verdadero. El texto "false" es FALSO
+    (antes bastaba con que el campo tuviera texto para contar como administrador)."""
+    if isinstance(valor, bool):
+        return valor
+    return str(valor).strip().lower() in ('true', '1', 'si', 'sí', 'yes')
+
+
+def rol_de(user):
+    """Rol efectivo de un documento de usuario."""
+    if not user:
+        return None
+    if user.get('matricula') in SUPER_ADMIN_MATRICULAS:
+        return ROL_SUPER
+    rol = user.get('rol')
+    if rol in ROLES_VALIDOS:
+        return rol
+    return ROL_ADMIN if _bool_estricto(user.get('es_admin')) else ROL_ALUMNO   # cuentas antiguas
+
+
+def url_panel(rol):
+    return '/superadmin/usuarios' if rol == ROL_SUPER else '/admin'
+
+
+def rol_requerido(*roles, redirigir=False):
+    """Decorador: exige sesión y que el rol del usuario esté en `roles`.
+    redirigir=True manda a quien no corresponde a su panel (en vez de mostrar 403)."""
+    from functools import wraps
+    def decorador(f):
+        @wraps(f)
+        @jwt_required()
+        def decorated(*args, **kwargs):
+            user = collection.find_one({"matricula": get_jwt_identity()})
+            rol = rol_de(user)
+            if rol not in roles:
+                if redirigir and rol:
+                    return redirect(url_panel(rol) if rol != ROL_ALUMNO else '/pagina_principal')
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated
+    return decorador
+
+
+admin_required  = rol_requerido(ROL_ADMIN)                    # Control Escolar
+super_required  = rol_requerido(ROL_SUPER)                    # administración del sistema
+alumno_required = rol_requerido(ROL_ALUMNO, redirigir=True)   # trámites del alumno
+
+
 @app.context_processor
 def inject_user():
+    usuario, rol = None, None
     try:
         verify_jwt_in_request(optional=True)
         matricula = get_jwt_identity()
         if matricula:
             user = collection.find_one({"matricula": matricula})
             usuario = user["usuario"] if user else matricula
-            es_admin = user.get("es_admin", False) if user else False
-        else:
-            usuario  = None
-            es_admin = False
+            rol = rol_de(user)
     except Exception:
-        usuario  = None
-        es_admin = False
+        usuario, rol = None, None
     # Token CSRF (cookie "csrf_access_token" que crea flask-jwt-extended); los formularios
     # POST lo envían en el campo oculto "csrf_token".
-    return dict(usuario=usuario, es_admin=es_admin,
+    return dict(usuario=usuario, rol=rol,
+                es_admin=(rol == ROL_ADMIN),          # compatibilidad con plantillas antiguas
+                es_alumno=(rol == ROL_ALUMNO),
+                es_super=(rol == ROL_SUPER),
+                es_staff=(rol in (ROL_ADMIN, ROL_SUPER)),
+                panel_url=url_panel(rol),
+                panel_label=('Administración' if rol == ROL_SUPER else 'Panel Admin'),
+                etiqueta_rol=ETIQUETA_ROL.get(rol, ''),
                 csrf_token=request.cookies.get('csrf_access_token', ''))
 
 # ======================================================
@@ -858,7 +925,8 @@ def registro():
             'contrasena': hashed,
             'intentos_fallidos': 0,
             'bloqueado_hasta': None,
-            'es_admin': False
+            'es_admin': False,
+            'rol': ROL_ALUMNO
         })
 
         flash("Registro exitoso. Inicia sesión.", "success")
@@ -893,7 +961,9 @@ def login():
 
         access_token = create_access_token(identity=user['matricula'],
                                            expires_delta=timedelta(minutes=ACCESS_WEB_MINUTOS))
-        response = redirect(url_for('pagina_principal'))
+        # El personal entra directo a su panel; el alumno, a la página principal.
+        rol = rol_de(user)
+        response = redirect(url_panel(rol) if rol in (ROL_ADMIN, ROL_SUPER) else url_for('pagina_principal'))
         set_access_cookies(response, access_token)
         return response
 
@@ -938,7 +1008,7 @@ def mi_perfil():
 
 
 @app.route('/inscripcion')
-@jwt_required()
+@alumno_required
 def inscripcion():
     matricula = get_jwt_identity()
     user = collection.find_one({"matricula": matricula})
@@ -947,7 +1017,7 @@ def inscripcion():
 
 
 @app.route('/reinscripcion')
-@jwt_required()
+@alumno_required
 def reinscripcion():
     matricula = get_jwt_identity()
     user = collection.find_one({"matricula": matricula})
@@ -968,7 +1038,7 @@ def soporte():
 # ======================================================
 
 @app.route('/mi_historial')
-@jwt_required()
+@alumno_required
 def mi_historial():
     matricula = get_jwt_identity()
     user = collection.find_one({"matricula": matricula})
@@ -995,20 +1065,6 @@ def mi_historial():
 # ======================================================
 # PANEL DE ADMINISTRADOR  ← NUEVO
 # ======================================================
-
-def admin_required(f):
-    """Decorador: verifica que el usuario tenga rol admin."""
-    from functools import wraps
-    @wraps(f)
-    @jwt_required()
-    def decorated(*args, **kwargs):
-        matricula = get_jwt_identity()
-        user = collection.find_one({"matricula": matricula})
-        if not user or not user.get("es_admin", False):
-            abort(403)
-        return f(*args, **kwargs)
-    return decorated
-
 
 @app.route('/admin')
 @admin_required
@@ -1081,6 +1137,119 @@ def actualizar_estatus():
     )
     flash(mensaje, "success" if ok else "error")
     return redirect(url_for('admin_panel'))
+
+# ======================================================
+# SUPER ADMIN — ADMINISTRACIÓN DEL SISTEMA (usuarios y roles)
+# ======================================================
+
+@app.route('/superadmin/usuarios')
+@super_required
+def superadmin_usuarios():
+    q = request.args.get('q', '').strip()[:60]
+    filtro_rol = request.args.get('rol', '')
+    filtro = {}
+    if q:
+        patron = {"$regex": re.escape(q), "$options": "i"}
+        filtro["$or"] = [{"matricula": patron}, {"usuario": patron}, {"email": patron}]
+    docs = list(collection.find(filtro, {"contrasena": 0}).sort("matricula", 1).limit(500))
+    ahora = datetime.utcnow()
+    usuarios = []
+    for d in docs:
+        rol = rol_de(d)
+        if filtro_rol in ROLES_VALIDOS and rol != filtro_rol:
+            continue
+        bloq = d.get("bloqueado_hasta")
+        usuarios.append({
+            "matricula": d.get("matricula", ""), "usuario": d.get("usuario", ""),
+            "email": d.get("email", ""), "rol": rol, "etiqueta": ETIQUETA_ROL[rol],
+            "fijo": d.get("matricula") in SUPER_ADMIN_MATRICULAS,
+            "bloqueado": bool(bloq and bloq > ahora),
+            "intentos": d.get("intentos_fallidos", 0),
+        })
+    conteo = {r: 0 for r in ROLES_VALIDOS}
+    for d in collection.find({}, {"matricula": 1, "rol": 1, "es_admin": 1}):
+        conteo[rol_de(d)] += 1
+    return render_template('superadmin_usuarios.html', usuarios=usuarios, q=q,
+                           filtro_rol=filtro_rol, conteo=conteo, roles=ROLES_VALIDOS,
+                           etiquetas=ETIQUETA_ROL, yo=get_jwt_identity())
+
+
+def _super_objetivo(matricula):
+    """Usuario sobre el que actúa el super admin (nunca uno mismo)."""
+    if matricula == get_jwt_identity():
+        return None, "No puedes modificar tu propia cuenta."
+    user = collection.find_one({"matricula": matricula})
+    if not user:
+        return None, "Usuario no encontrado."
+    return user, None
+
+
+@app.route('/superadmin/usuarios/rol', methods=['POST'])
+@super_required
+def superadmin_cambiar_rol():
+    matricula = request.form.get('matricula', '').strip()
+    nuevo = request.form.get('rol', '').strip()
+    user, error = _super_objetivo(matricula)
+    if not error and nuevo not in ROLES_VALIDOS:
+        error = "Rol no válido."
+    if not error and matricula in SUPER_ADMIN_MATRICULAS:
+        error = "Esa cuenta es super admin fija (variable de entorno) y no se puede cambiar aquí."
+    if error:
+        flash(error, "error")
+    else:
+        collection.update_one({"matricula": matricula},
+                              {"$set": {"rol": nuevo, "es_admin": nuevo == ROL_ADMIN}})
+        cerrar_todas_las_sesiones(matricula)   # el cambio de permisos aplica de inmediato
+        app.logger.info("ROL %s: %s -> %s (por %s)", matricula, rol_de(user), nuevo, get_jwt_identity())
+        flash(f"{matricula} ahora es {ETIQUETA_ROL[nuevo]}.", "success")
+    return redirect(request.referrer or url_for('superadmin_usuarios'))
+
+
+@app.route('/superadmin/usuarios/desbloquear', methods=['POST'])
+@super_required
+def superadmin_desbloquear():
+    matricula = request.form.get('matricula', '').strip()
+    if not collection.find_one({"matricula": matricula}):
+        flash("Usuario no encontrado.", "error")
+    else:
+        collection.update_one({"matricula": matricula},
+                              {"$set": {"intentos_fallidos": 0, "bloqueado_hasta": None}})
+        app.logger.info("DESBLOQUEO %s (por %s)", matricula, get_jwt_identity())
+        flash(f"Cuenta {matricula} desbloqueada.", "success")
+    return redirect(request.referrer or url_for('superadmin_usuarios'))
+
+
+@app.route('/superadmin/usuarios/cerrar_sesiones', methods=['POST'])
+@super_required
+def superadmin_cerrar_sesiones():
+    matricula = request.form.get('matricula', '').strip()
+    user, error = _super_objetivo(matricula)
+    if error:
+        flash(error, "error")
+    else:
+        cerrar_todas_las_sesiones(matricula)
+        flash(f"Se cerraron todas las sesiones de {matricula}.", "success")
+    return redirect(request.referrer or url_for('superadmin_usuarios'))
+
+
+@app.route('/superadmin/usuarios/eliminar', methods=['POST'])
+@super_required
+def superadmin_eliminar():
+    matricula = request.form.get('matricula', '').strip()
+    user, error = _super_objetivo(matricula)
+    if not error and matricula in SUPER_ADMIN_MATRICULAS:
+        error = "Esa cuenta es super admin fija y no se puede eliminar."
+    if not error and rol_de(user) == ROL_SUPER:
+        error = "Primero cambia el rol de ese super admin."
+    if error:
+        flash(error, "error")
+    else:
+        # Solo se borra la cuenta; sus solicitudes quedan como historial de Control Escolar.
+        collection.delete_one({"matricula": matricula})
+        app.logger.info("ELIMINA %s (por %s)", matricula, get_jwt_identity())
+        flash(f"Cuenta {matricula} eliminada.", "success")
+    return redirect(url_for('superadmin_usuarios'))
+
 
 # ======================================================
 # DASHBOARD Y REPORTES DEL ADMINISTRADOR
@@ -1204,7 +1373,7 @@ def descargar_reporte(token):
     except BadSignature:
         abort(403)
     admin = collection.find_one({"matricula": datos.get("admin")})
-    if not admin or not admin.get("es_admin", False):
+    if rol_de(admin) != ROL_ADMIN:
         abort(403)
     filtros, error = leer_filtros_reporte(datos)
     if error:
@@ -1418,7 +1587,7 @@ def procesar_reinscripcion(matricula_jwt, user, form, files, exigir_contacto=Tru
 
 @app.route('/inscripcion_submit', methods=['POST'])
 @limiter.limit(LIMITE_TRAMITES)
-@jwt_required()
+@alumno_required
 def inscripcion_submit():
     matricula_jwt = get_jwt_identity()
     user = collection.find_one({"matricula": matricula_jwt})
@@ -1446,7 +1615,7 @@ def inscripcion_submit():
 
 @app.route('/reinscripcion_submit', methods=['POST'])
 @limiter.limit(LIMITE_TRAMITES)
-@jwt_required()
+@alumno_required
 def reinscripcion_submit():
     matricula_jwt = get_jwt_identity()
     user = collection.find_one({"matricula": matricula_jwt})
@@ -1639,7 +1808,8 @@ def api_login():
         expires_in=ACCESS_MOVIL_MINUTOS * 60,
         usuario=user['usuario'],
         matricula=user['matricula'],
-        es_admin=user.get('es_admin', False)
+        es_admin=(rol_de(user) == ROL_ADMIN),
+        rol=rol_de(user)
     ), 200
 
 
@@ -1657,7 +1827,8 @@ def api_refresh():
     access, refresh = emitir_tokens_movil(user)
     return jsonify(ok=True, access_token=access, refresh_token=refresh,
                    expires_in=ACCESS_MOVIL_MINUTOS * 60,
-                   usuario=user['usuario'], es_admin=user.get('es_admin', False)), 200
+                   usuario=user['usuario'], es_admin=(rol_de(user) == ROL_ADMIN),
+                   rol=rol_de(user)), 200
 
 
 @app.route('/api/logout', methods=['POST'])
@@ -1705,7 +1876,8 @@ def api_registro():
     collection.insert_one({
         'matricula': matricula, 'usuario': usuario,
         'email': email, 'contrasena': hashed,
-        'intentos_fallidos': 0, 'bloqueado_hasta': None, 'es_admin': False
+        'intentos_fallidos': 0, 'bloqueado_hasta': None, 'es_admin': False,
+        'rol': ROL_ALUMNO
     })
     return jsonify(ok=True, mensaje="Registro exitoso. Inicia sesión."), 201
 
@@ -1717,15 +1889,19 @@ def api_perfil():
     # Lista blanca: solo los campos que la app necesita (nunca contraseña, contadores de
     # intentos, fechas de bloqueo ni cualquier campo interno que se agregue en el futuro).
     user = collection.find_one({'matricula': matricula},
-                               {'_id': 0, 'matricula': 1, 'usuario': 1, 'email': 1, 'es_admin': 1})
+                               {'_id': 0, 'matricula': 1, 'usuario': 1, 'email': 1,
+                                'es_admin': 1, 'rol': 1})
     if not user:
         return jsonify(ok=False, mensaje="Usuario no encontrado."), 404
+    rol = rol_de({**user, 'matricula': matricula})
+    user['es_admin'] = (rol == ROL_ADMIN)       # siempre booleano (nunca el texto "false")
+    user['rol'] = rol
     return jsonify(ok=True, **user), 200
 
 
 @app.route('/api/inscripcion', methods=['POST'])
 @limiter.limit(LIMITE_TRAMITES)
-@jwt_required()
+@rol_requerido(ROL_ALUMNO)
 def api_inscripcion():
     """Inscripción desde la app móvil (multipart/form-data con los mismos campos y
     archivos que el formulario web). Aplica las mismas validaciones del servidor."""
@@ -1740,7 +1916,7 @@ def api_inscripcion():
 
 @app.route('/api/reinscripcion', methods=['POST'])
 @limiter.limit(LIMITE_TRAMITES)
-@jwt_required()
+@rol_requerido(ROL_ALUMNO)
 def api_reinscripcion():
     matricula = get_jwt_identity()
     user = collection.find_one({"matricula": matricula})
@@ -1753,7 +1929,7 @@ def api_reinscripcion():
 
 
 @app.route('/api/historial', methods=['GET'])
-@jwt_required()
+@rol_requerido(ROL_ALUMNO)
 def api_historial():
     matricula = get_jwt_identity()
     inscs  = list(inscripciones_col.find({'usuario': matricula}, {'_id': 0}))
@@ -1764,7 +1940,7 @@ def api_historial():
 def api_usuario_admin():
     """Devuelve el usuario admin del token JWT, o None si no es administrador."""
     user = collection.find_one({'matricula': get_jwt_identity()})
-    if not user or not user.get('es_admin'):
+    if rol_de(user) != ROL_ADMIN:
         return None
     return user
 

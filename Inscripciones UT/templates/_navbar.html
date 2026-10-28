@@ -1,0 +1,43 @@
+{# Barra de navegación según el rol. Antes de incluirla:
+   {% set activo = 'inicio' | 'inscripcion' | 'reinscripcion' | 'soporte' %}  y  {% set con_tramites = true %} #}
+<nav class="navbar">
+    <div class="navbar-left">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" class="nav-logo" alt="Gobierno NL">
+        <span class="navbar-title">Gobierno de Nuevo León</span>
+    </div>
+    <ul class="navbar-menu">
+        <li><a href="/pagina_principal" class="{{ 'active' if activo == 'inicio' }}">Inicio</a></li>
+        {% if es_alumno and con_tramites %}
+        <li><a href="/inscripcion" class="{{ 'active' if activo == 'inscripcion' }}">Inscripción</a></li>
+        <li><a href="/reinscripcion" class="{{ 'active' if activo == 'reinscripcion' }}">Reinscripción</a></li>
+        {% endif %}
+        <li><a href="/soporte" class="{{ 'active' if activo == 'soporte' }}">Soporte</a></li>
+        {% if not es_alumno %}
+        <li><a href="{{ panel_url }}" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> {{ panel_label }}</a></li>
+        {% endif %}
+        <li class="dropdown">
+            <button class="dropbtn">{{ usuario[0].upper() if usuario else 'U' }}</button>
+            <div class="dropdown-content">
+                <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+                {% if es_alumno %}<a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>{% endif %}
+                <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+            </div>
+        </li>
+    </ul>
+    <button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+    <a href="/pagina_principal">Inicio</a>
+    {% if es_alumno and con_tramites %}
+    <a href="/inscripcion">Inscripción</a>
+    <a href="/reinscripcion">Reinscripción</a>
+    {% endif %}
+    <a href="/soporte">Soporte</a>
+    {% if es_alumno %}
+    <a href="/mi_historial"><i class="fas fa-history"></i> Mi Historial</a>
+    {% else %}
+    <a href="{{ panel_url }}" style="color:var(--nl-orange);font-weight:bold;"><i class="fas fa-shield-alt"></i> {{ panel_label }}</a>
+    {% endif %}
+    <a href="/mi_perfil"><i class="fas fa-user"></i> Mi Perfil</a>
+    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</a>
+</div>

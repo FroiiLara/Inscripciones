@@ -59,7 +59,7 @@ ok(api('post', '/api/refresh', headers=bearer(j2['refresh_token'])).status_code 
 # ===== #15 perfil: lista blanca =====
 t = login().get_json()['access_token']
 p = api('get', '/api/perfil', headers=bearer(t)).get_json()
-ok(set(p) == {'ok', 'matricula', 'usuario', 'email', 'es_admin'}, f'perfil solo expone {sorted(p)}')
+ok(set(p) == {'ok', 'matricula', 'usuario', 'email', 'es_admin', 'rol'}, f'perfil solo expone {sorted(p)}')
 
 # ===== #5 CSRF + cookies del navegador =====
 w = A.app.test_client()
