@@ -1142,11 +1142,9 @@ def actualizar_estatus():
 # SUPER ADMIN — ADMINISTRACIÓN DEL SISTEMA (usuarios y roles)
 # ======================================================
 
-@app.route('/superadmin/usuarios')
-@super_required
-def superadmin_usuarios():
-    q = request.args.get('q', '').strip()[:60]
-    filtro_rol = request.args.get('rol', '')
+def listar_usuarios(q='', filtro_rol=''):
+    """Usuarios con su rol efectivo (sin contraseña). Lo usan la web y la app móvil."""
+    q = (q or '').strip()[:60]
     filtro = {}
     if q:
         patron = {"$regex": re.escape(q), "$options": "i"}
@@ -1166,17 +1164,20 @@ def superadmin_usuarios():
             "bloqueado": bool(bloq and bloq > ahora),
             "intentos": d.get("intentos_fallidos", 0),
         })
+    return usuarios
+
+
+def conteo_roles():
     conteo = {r: 0 for r in ROLES_VALIDOS}
     for d in collection.find({}, {"matricula": 1, "rol": 1, "es_admin": 1}):
         conteo[rol_de(d)] += 1
-    return render_template('superadmin_usuarios.html', usuarios=usuarios, q=q,
-                           filtro_rol=filtro_rol, conteo=conteo, roles=ROLES_VALIDOS,
-                           etiquetas=ETIQUETA_ROL, yo=get_jwt_identity())
+    return conteo
 
 
-def _super_objetivo(matricula):
-    """Usuario sobre el que actúa el super admin (nunca uno mismo)."""
-    if matricula == get_jwt_identity():
+# --- Acciones del super admin (compartidas por la web y la API). Devuelven (ok, mensaje). ---
+
+def _su_objetivo(actor, matricula):
+    if matricula == actor:
         return None, "No puedes modificar tu propia cuenta."
     user = collection.find_one({"matricula": matricula})
     if not user:
@@ -1184,71 +1185,90 @@ def _super_objetivo(matricula):
     return user, None
 
 
-@app.route('/superadmin/usuarios/rol', methods=['POST'])
-@super_required
-def superadmin_cambiar_rol():
-    matricula = request.form.get('matricula', '').strip()
-    nuevo = request.form.get('rol', '').strip()
-    user, error = _super_objetivo(matricula)
+def su_cambiar_rol(actor, matricula, nuevo):
+    user, error = _su_objetivo(actor, matricula)
     if not error and nuevo not in ROLES_VALIDOS:
         error = "Rol no válido."
     if not error and matricula in SUPER_ADMIN_MATRICULAS:
         error = "Esa cuenta es super admin fija (variable de entorno) y no se puede cambiar aquí."
     if error:
-        flash(error, "error")
-    else:
-        collection.update_one({"matricula": matricula},
-                              {"$set": {"rol": nuevo, "es_admin": nuevo == ROL_ADMIN}})
-        cerrar_todas_las_sesiones(matricula)   # el cambio de permisos aplica de inmediato
-        app.logger.info("ROL %s: %s -> %s (por %s)", matricula, rol_de(user), nuevo, get_jwt_identity())
-        flash(f"{matricula} ahora es {ETIQUETA_ROL[nuevo]}.", "success")
-    return redirect(request.referrer or url_for('superadmin_usuarios'))
+        return False, error
+    collection.update_one({"matricula": matricula},
+                          {"$set": {"rol": nuevo, "es_admin": nuevo == ROL_ADMIN}})
+    cerrar_todas_las_sesiones(matricula)   # el cambio de permisos aplica de inmediato
+    app.logger.info("ROL %s: %s -> %s (por %s)", matricula, rol_de(user), nuevo, actor)
+    return True, f"{matricula} ahora es {ETIQUETA_ROL[nuevo]}."
 
 
-@app.route('/superadmin/usuarios/desbloquear', methods=['POST'])
-@super_required
-def superadmin_desbloquear():
-    matricula = request.form.get('matricula', '').strip()
+def su_desbloquear(actor, matricula):
     if not collection.find_one({"matricula": matricula}):
-        flash("Usuario no encontrado.", "error")
-    else:
-        collection.update_one({"matricula": matricula},
-                              {"$set": {"intentos_fallidos": 0, "bloqueado_hasta": None}})
-        app.logger.info("DESBLOQUEO %s (por %s)", matricula, get_jwt_identity())
-        flash(f"Cuenta {matricula} desbloqueada.", "success")
-    return redirect(request.referrer or url_for('superadmin_usuarios'))
+        return False, "Usuario no encontrado."
+    collection.update_one({"matricula": matricula},
+                          {"$set": {"intentos_fallidos": 0, "bloqueado_hasta": None}})
+    app.logger.info("DESBLOQUEO %s (por %s)", matricula, actor)
+    return True, f"Cuenta {matricula} desbloqueada."
 
 
-@app.route('/superadmin/usuarios/cerrar_sesiones', methods=['POST'])
-@super_required
-def superadmin_cerrar_sesiones():
-    matricula = request.form.get('matricula', '').strip()
-    user, error = _super_objetivo(matricula)
+def su_cerrar_sesiones(actor, matricula):
+    user, error = _su_objetivo(actor, matricula)
     if error:
-        flash(error, "error")
-    else:
-        cerrar_todas_las_sesiones(matricula)
-        flash(f"Se cerraron todas las sesiones de {matricula}.", "success")
-    return redirect(request.referrer or url_for('superadmin_usuarios'))
+        return False, error
+    cerrar_todas_las_sesiones(matricula)
+    return True, f"Se cerraron todas las sesiones de {matricula}."
 
 
-@app.route('/superadmin/usuarios/eliminar', methods=['POST'])
-@super_required
-def superadmin_eliminar():
-    matricula = request.form.get('matricula', '').strip()
-    user, error = _super_objetivo(matricula)
+def su_eliminar(actor, matricula):
+    user, error = _su_objetivo(actor, matricula)
     if not error and matricula in SUPER_ADMIN_MATRICULAS:
         error = "Esa cuenta es super admin fija y no se puede eliminar."
     if not error and rol_de(user) == ROL_SUPER:
         error = "Primero cambia el rol de ese super admin."
     if error:
-        flash(error, "error")
-    else:
-        # Solo se borra la cuenta; sus solicitudes quedan como historial de Control Escolar.
-        collection.delete_one({"matricula": matricula})
-        app.logger.info("ELIMINA %s (por %s)", matricula, get_jwt_identity())
-        flash(f"Cuenta {matricula} eliminada.", "success")
-    return redirect(url_for('superadmin_usuarios'))
+        return False, error
+    # Solo se borra la cuenta; sus solicitudes quedan como historial de Control Escolar.
+    collection.delete_one({"matricula": matricula})
+    app.logger.info("ELIMINA %s (por %s)", matricula, actor)
+    return True, f"Cuenta {matricula} eliminada."
+
+
+@app.route('/superadmin/usuarios')
+@super_required
+def superadmin_usuarios():
+    q = request.args.get('q', '').strip()[:60]
+    filtro_rol = request.args.get('rol', '')
+    return render_template('superadmin_usuarios.html', usuarios=listar_usuarios(q, filtro_rol), q=q,
+                           filtro_rol=filtro_rol, conteo=conteo_roles(), roles=ROLES_VALIDOS,
+                           etiquetas=ETIQUETA_ROL, yo=get_jwt_identity())
+
+
+def _accion_web(funcion, destino_ok=None):
+    ok, mensaje = funcion(get_jwt_identity(), request.form.get('matricula', '').strip())
+    flash(mensaje, "success" if ok else "error")
+    return redirect(destino_ok or request.referrer or url_for('superadmin_usuarios'))
+
+
+@app.route('/superadmin/usuarios/rol', methods=['POST'])
+@super_required
+def superadmin_cambiar_rol():
+    return _accion_web(lambda actor, m: su_cambiar_rol(actor, m, request.form.get('rol', '').strip()))
+
+
+@app.route('/superadmin/usuarios/desbloquear', methods=['POST'])
+@super_required
+def superadmin_desbloquear():
+    return _accion_web(su_desbloquear)
+
+
+@app.route('/superadmin/usuarios/cerrar_sesiones', methods=['POST'])
+@super_required
+def superadmin_cerrar_sesiones():
+    return _accion_web(su_cerrar_sesiones)
+
+
+@app.route('/superadmin/usuarios/eliminar', methods=['POST'])
+@super_required
+def superadmin_eliminar():
+    return _accion_web(su_eliminar, destino_ok=url_for('superadmin_usuarios'))
 
 
 # ======================================================
@@ -2012,6 +2032,48 @@ def api_admin_reporte_enlace():
         inscripciones=len(inscs),
         reinscripciones=len(reincs),
     ), 200
+
+
+# ---- API del super admin (app móvil) ----
+
+@app.route('/api/superadmin/usuarios', methods=['GET'])
+@rol_requerido(ROL_SUPER)
+def api_superadmin_usuarios():
+    yo = get_jwt_identity()
+    usuarios = listar_usuarios(request.args.get('q', ''), request.args.get('rol', ''))
+    for u in usuarios:
+        u['es_yo'] = (u['matricula'] == yo)
+    return jsonify(ok=True, usuarios=usuarios, conteo=conteo_roles()), 200
+
+
+def _api_su(funcion):
+    data = request.get_json(silent=True) or {}
+    ok, mensaje = funcion(get_jwt_identity(), str(data.get('matricula', '')).strip(), data)
+    return jsonify(ok=ok, mensaje=mensaje), (200 if ok else 400)
+
+
+@app.route('/api/superadmin/usuarios/rol', methods=['POST'])
+@rol_requerido(ROL_SUPER)
+def api_superadmin_rol():
+    return _api_su(lambda actor, m, d: su_cambiar_rol(actor, m, str(d.get('rol', '')).strip()))
+
+
+@app.route('/api/superadmin/usuarios/desbloquear', methods=['POST'])
+@rol_requerido(ROL_SUPER)
+def api_superadmin_desbloquear():
+    return _api_su(lambda actor, m, d: su_desbloquear(actor, m))
+
+
+@app.route('/api/superadmin/usuarios/cerrar_sesiones', methods=['POST'])
+@rol_requerido(ROL_SUPER)
+def api_superadmin_cerrar_sesiones():
+    return _api_su(lambda actor, m, d: su_cerrar_sesiones(actor, m))
+
+
+@app.route('/api/superadmin/usuarios/eliminar', methods=['POST'])
+@rol_requerido(ROL_SUPER)
+def api_superadmin_eliminar():
+    return _api_su(lambda actor, m, d: su_eliminar(actor, m))
 
 
 @app.route('/api/recuperar_contrasena', methods=['POST'])
